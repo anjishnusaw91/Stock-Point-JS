@@ -28,6 +28,7 @@
     "yahoo-finance2": "^2.13.3"
   },
   "devDependencies": {
+    "@types/nodemailer": "^6.4.17",
     "@types/react-dom": "^18"
   }
 }
