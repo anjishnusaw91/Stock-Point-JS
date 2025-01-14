@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import type { TransportOptions } from 'nodemailer';
+import type { TransportOptions, SentMessageInfo } from 'nodemailer';
 
-// Create a transporter using SMTP
-const transportOptions: TransportOptions = {
+const transportOptions = {
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-};
+} as nodemailer.TransportOptions;
 
 const transporter = nodemailer.createTransport(transportOptions);
 
