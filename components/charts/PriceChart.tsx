@@ -1,10 +1,13 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
-import { ApexOptions } from 'apexcharts';
+import ApexCharts from 'apexcharts';
 import { TechnicalData } from '@/types/technical';
 import { TECHNICAL_INDICATORS } from '@/constants/indicators';
 
-const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
+type ApexOptions = ApexCharts.ApexOptions;
+const Chart = dynamic(() => import('react-apexcharts'), { 
+  ssr: false 
+}) as React.ComponentType<any>;
 
 interface PriceChartProps {
   data: TechnicalData;
@@ -129,9 +132,9 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, selectedIndicators
           data: ema20.map((value, index) => 
             value === null ? null : {
               x: dates[index],
-              y: value,
+              y: value
             }
-          ).filter(Boolean),
+          ).filter((point): point is { x: number; y: number } => point !== null),
         });
       }
 
@@ -142,9 +145,9 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, selectedIndicators
           data: ema50.map((value, index) => 
             value === null ? null : {
               x: dates[index],
-              y: value,
+              y: value
             }
-          ).filter(Boolean),
+          ).filter((point): point is { x: number; y: number } => point !== null),
         });
       }
 
@@ -155,9 +158,9 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, selectedIndicators
           data: ema200.map((value, index) => 
             value === null ? null : {
               x: dates[index],
-              y: value,
+              y: value
             }
-          ).filter(Boolean),
+          ).filter((point): point is { x: number; y: number } => point !== null),
         });
       }
     }

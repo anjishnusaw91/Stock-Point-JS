@@ -1,9 +1,10 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
-import { ApexOptions } from 'apexcharts';
+import ApexCharts from 'apexcharts';
 import { TechnicalData } from '@/types/technical';
 
-const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
+type ApexOptions = ApexCharts.ApexOptions;
+const Chart = dynamic(() => import('react-apexcharts'), { ssr: false }) as React.ComponentType<any>;
 
 interface MACDChartProps {
   data: TechnicalData;
@@ -108,7 +109,7 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
         type: 'line',
         data: validData.map(point => ({
           x: point.x,
-          y: Number(point.macd.toFixed(2)),
+          y: Number(point.macd!.toFixed(2)),
         })),
       },
       {
@@ -116,15 +117,15 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
         type: 'line',
         data: validData.map(point => ({
           x: point.x,
-          y: Number(point.signal.toFixed(2)),
+          y: Number(point.signal!.toFixed(2)),
         })),
       },
       {
         name: 'Histogram',
-        type: 'bar',
+        type: 'line',
         data: validData.map(point => ({
           x: point.x,
-          y: Number(point.histogram.toFixed(2)),
+          y: Number(point.histogram!.toFixed(2)),
         })),
       },
     ];

@@ -1,9 +1,12 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
-import { ApexOptions } from 'apexcharts';
-import { TechnicalData, Indicator } from '@/types/technical';
+import ApexCharts from 'apexcharts';
+import { Indicator, TechnicalData } from '@/types/technical';
 
-const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
+type ApexOptions = ApexCharts.ApexOptions;
+const Chart = dynamic(() => import('react-apexcharts'), { 
+  ssr: false 
+}) as React.ComponentType<any>;
 
 interface IndicatorChartProps {
   indicator: Indicator;
