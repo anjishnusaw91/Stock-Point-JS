@@ -7,6 +7,34 @@ interface TechnicalIndicator {
   color: string;
 }
 
+interface TechnicalData {
+  prices: {
+    date: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }[];
+  indicators: {
+    ema?: {
+      ema20: (number | null)[];
+      ema50: (number | null)[];
+      ema200: (number | null)[];
+    };
+    bollinger?: {
+      upper: (number | null)[];
+      middle: (number | null)[];
+      lower: (number | null)[];
+    };
+    macd?: {
+      line: (number | null)[];
+      signal: (number | null)[];
+      histogram: (number | null)[];
+    };
+  };
+}
+
 function calculateRSI(prices: number[]): number[] {
   const period = 14;
   if (prices.length < period + 1) {
@@ -107,9 +135,9 @@ function calculateEMA(prices: number[], period: number): number[] {
 }
 
 function calculateBollingerBands(prices: number[], period = 20, multiplier = 2): {
-  upper: number[];
-  middle: number[];
-  lower: number[];
+  upper: (number | null)[];
+  middle: (number | null)[];
+  lower: (number | null)[];
 } {
   const sma = prices.map((_, index) => {
     if (index < period - 1) return null;
@@ -126,9 +154,9 @@ function calculateBollingerBands(prices: number[], period = 20, multiplier = 2):
   });
 
   return {
-    upper: sma.map((mean, i) => mean === null ? null : mean + (multiplier * stdDev[i]!)),
+    upper: sma.map((mean, i) => mean === null ? null : mean + (multiplier * (stdDev[i] ?? 0))),
     middle: sma,
-    lower: sma.map((mean, i) => mean === null ? null : mean - (multiplier * stdDev[i]!)),
+    lower: sma.map((mean, i) => mean === null ? null : mean - (multiplier * (stdDev[i] ?? 0))),
   };
 }
 

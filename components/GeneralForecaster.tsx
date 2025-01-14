@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { ApexOptions } from 'apexcharts';
 
-const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
+const Chart = dynamic(() => import('react-apexcharts'), { 
+  ssr: false 
+}) as React.ComponentType<React.ComponentProps<typeof import('react-apexcharts')>>;
 
 interface StockSymbol {
   symbol: string;

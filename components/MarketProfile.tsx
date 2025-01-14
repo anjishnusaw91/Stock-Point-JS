@@ -3,7 +3,9 @@ import dynamic from 'next/dynamic';
 import { ApexOptions } from 'apexcharts';
 
 // Dynamically import ApexCharts to avoid SSR issues
-const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
+const Chart = dynamic(() => import('react-apexcharts'), { 
+  ssr: false 
+}) as React.ComponentType<React.ComponentProps<typeof import('react-apexcharts')>>;
 
 interface StockData {
   date: string;

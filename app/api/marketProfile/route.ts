@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const queryOptions = {
       period1: new Date(startDate || '2024-01-01'),
       period2: new Date(endDate || new Date()),
-      interval: '1d',
+      interval: '1d' as '1d' | '1wk' | '1mo',
     };
 
     console.log(`Fetching data for ${nseSymbol}...`);

@@ -43,4 +43,5 @@ export interface Indicator {
   color: string;
   type: 'overlay' | 'separate';
   height?: number;
+  disabled?: boolean;
 } 
