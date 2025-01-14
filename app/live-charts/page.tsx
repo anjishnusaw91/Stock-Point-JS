@@ -1,7 +1,7 @@
 'use client';
 
-import LiveChart from "../components/LiveChart";
+import LiveCharts from "../../components/LiveCharts";
 
 export default function LiveChartsPage() {
-  return <LiveChart />;
+  return <LiveCharts />;
 } 

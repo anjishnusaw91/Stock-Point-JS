@@ -1,6 +1,6 @@
 'use client';
 
-import { ContactForm } from "../components/ContactForm";
+import Contact from "../../components/Contact";
 
 export default function ContactPage() {
   return (
@@ -12,7 +12,7 @@ export default function ContactPage() {
             Have questions? We'd love to hear from you.
           </p>
         </div>
-        <ContactForm />
+        <Contact />
       </div>
     </div>
   );

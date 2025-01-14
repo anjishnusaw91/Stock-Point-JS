@@ -1,6 +1,6 @@
 import React from 'react';
 import { StockSymbol } from '@/types/technical';
-import { TECHNICAL_INDICATORS } from '@/constants/indicators';
+import { TECHNICAL_INDICATORS } from '../../constants/indicators';
 
 interface ChartControlsProps {
   symbols: StockSymbol[];
