@@ -1,6 +1,0 @@
-{
-  "/api/nseStocks/route": "app/api/nseStocks/route.js",
-  "/api/generalForecaster/route": "app/api/generalForecaster/route.js",
-  "/page": "app/page.js",
-  "/api/compareStocks/route": "app/api/compareStocks/route.js"
-}
