@@ -29,7 +29,7 @@ export const TECHNICAL_INDICATORS: Indicator[] = [
     color: '#FF9800',
     type: 'separate',
     height: 200,
-    disabled: true,
+    // disabled: true,
   },
   {
     id: 'macd',

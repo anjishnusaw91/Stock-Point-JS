@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { ApexOptions } from 'apexcharts';
-import { TECHNICAL_INDICATORS } from '@/constants/indicators';
+import { TECHNICAL_INDICATORS } from '../constants/indicators';
 import { StockSymbol, TechnicalData, Indicator } from '@/types/technical';
 import { ChartControls } from './charts/ChartControls';
 import { PriceChart } from './charts/PriceChart';

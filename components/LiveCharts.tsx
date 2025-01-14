@@ -19,7 +19,7 @@ const STOCK_SYMBOLS: StockSymbol[] = [
   { symbol: 'ICICIBANK.NS', name: 'ICICI Bank' },
 ];
 
-const LiveChart: React.FC = () => {
+const LiveCharts: React.FC = () => {
   const [selectedSymbol, setSelectedSymbol] = useState<string>('');
 
   return (
@@ -56,4 +56,4 @@ const LiveChart: React.FC = () => {
   );
 };
 
-export default LiveChart; 
+export default LiveCharts; 

@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-const ContactForm: React.FC = () => {
+const Contact: React.FC = () => {
   return (
     <div className="mt-8">
       <form 
@@ -120,4 +120,4 @@ const ContactForm: React.FC = () => {
   );
 };
 
-export default ContactForm; 
+export default Contact; 
