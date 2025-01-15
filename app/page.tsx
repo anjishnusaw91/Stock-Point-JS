@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, redirect } from 'next/navigation'
 import Navbar from '../components/Navbar'
 import Home from '../components/Home'
 import PerformanceComparator from '../components/PerformanceComparator'
