@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, redirect } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Navbar from '../components/Navbar'
 import Home from '../components/Home'
 import PerformanceComparator from '../components/PerformanceComparator'
@@ -13,18 +13,13 @@ import LiveCharts from '../components/LiveCharts'
 import Contact from '../components/Contact'
 
 export default function MainPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(true)
   const [selectedTab, setSelectedTab] = useState('Home')
   const router = useRouter()
 
   useEffect(() => {
-    const authStatus = localStorage.getItem('isAuthenticated')
-    if (authStatus === 'true') {
-      setIsAuthenticated(true)
-    } else {
-      router.push('/login')
-    }
-  }, [router])
+    setIsAuthenticated(true)
+  }, [])
 
   const renderContent = () => {
     switch (selectedTab) {
@@ -47,10 +42,6 @@ export default function MainPage() {
       default:
         return <Home />
     }
-  }
-
-  if (!isAuthenticated) {
-    return <div>Loading...</div>
   }
 
   return (
