@@ -4,7 +4,10 @@ import ApexCharts from 'apexcharts';
 import { TechnicalData } from '@/types/technical';
 
 type ApexOptions = ApexCharts.ApexOptions;
-const Chart = dynamic(() => import('react-apexcharts'), { ssr: false }) as React.ComponentType<any>;
+const Chart = dynamic(() => import('react-apexcharts'), { 
+  ssr: false,
+  loading: () => <div>Loading Chart...</div>
+}) as React.ComponentType<any>;
 
 interface MACDChartProps {
   data: TechnicalData;

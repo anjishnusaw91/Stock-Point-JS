@@ -6,7 +6,8 @@ import { TECHNICAL_INDICATORS } from '@/constants/indicators';
 
 type ApexOptions = ApexCharts.ApexOptions;
 const Chart = dynamic(() => import('react-apexcharts'), { 
-  ssr: false 
+  ssr: false,
+  loading: () => <div>Loading Chart...</div>
 }) as React.ComponentType<any>;
 
 interface PriceChartProps {
