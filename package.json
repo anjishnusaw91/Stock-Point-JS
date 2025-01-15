@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "clean": "rm -rf .next node_modules",
-    "clean:install": "npm run clean && npm install --legacy-peer-deps",
+    "clean:install": "npm install --legacy-peer-deps",
     "vercel-build": "npm run clean:install && npm run build"
   },
   "dependencies": {
