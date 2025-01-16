@@ -2,7 +2,7 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 import ApexCharts from 'apexcharts';
 import { TechnicalData } from '@/types/technical';
-import { ChartContainer } from './ChartContainer';
+import ChartContainer from './ChartContainer';
 
 type ApexOptions = ApexCharts.ApexOptions;
 const Chart = dynamic(() => import('react-apexcharts'), { ssr: false }) as React.ComponentType<any>;
