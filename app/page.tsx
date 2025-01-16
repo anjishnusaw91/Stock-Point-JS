@@ -84,9 +84,15 @@ export default function MainPage() {
     }
 
     return isSignup ? (
-      <SignupForm onSignup={handleSignup} />
+      <SignupForm 
+        onSignup={handleSignup} 
+        onSwitchToLogin={() => setIsSignup(false)} 
+      />
     ) : (
-      <LoginForm onLogin={handleLogin} onSwitchToSignup={() => setIsSignup(true)} />
+      <LoginForm 
+        onLogin={handleLogin} 
+        onSwitchToSignup={() => setIsSignup(true)} 
+      />
     )
   }
 
