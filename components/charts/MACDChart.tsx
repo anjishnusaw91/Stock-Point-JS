@@ -4,6 +4,7 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 import ApexCharts from 'apexcharts';
 import { TechnicalData } from '@/types/technical';
+import { ChartContainer } from './ChartContainer';
 
 type ApexOptions = ApexCharts.ApexOptions;
 const Chart = dynamic(() => import('react-apexcharts'), { 
@@ -18,11 +19,13 @@ interface MACDChartProps {
 export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
   const getChartOptions = (): ApexOptions => ({
     chart: {
-      type: 'bar',
-      height: 200,
+      type: 'line',
+      height: 250,
       toolbar: { show: false },
       animations: { enabled: false },
-      background: 'transparent',
+      zoom: {
+        enabled: false
+      }
     },
     stroke: {
       width: [2, 2, 0],
@@ -35,8 +38,14 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
     xaxis: {
       type: 'datetime',
       labels: {
+        rotate: -45,
+        rotateAlways: false,
+        hideOverlappingLabels: true,
         datetimeUTC: false,
         format: 'dd MMM',
+        style: {
+          fontSize: '10px',
+        }
       },
       axisBorder: {
         show: true,
@@ -47,10 +56,10 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
     },
     yaxis: {
       labels: {
-        formatter: (value) => value.toFixed(2),
-      },
-      tickAmount: 5,
-      forceNiceScale: true,
+        style: {
+          fontSize: '10px',
+        }
+      }
     },
     tooltip: {
       shared: true,
@@ -89,6 +98,18 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
     markers: {
       size: 0,
     },
+    responsive: [{
+      breakpoint: 480,
+      options: {
+        chart: {
+          height: 250
+        },
+        legend: {
+          position: 'bottom',
+          offsetY: 7
+        }
+      }
+    }]
   });
 
   const getSeries = () => {
@@ -137,14 +158,13 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow">
-      <h3 className="text-lg font-semibold mb-2">MACD (12-26-9)</h3>
-      <Chart
-        options={getChartOptions()}
-        series={getSeries()}
-        type="bar"
-        height={200}
+    <ChartContainer title="MACD (12-26-9)">
+      <Chart 
+        options={getChartOptions()} 
+        series={getSeries()} 
+        type="line" 
+        height={250}
       />
-    </div>
+    </ChartContainer>
   );
 }; 
