@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { supabase } from '../lib/supabaseClient';
 
 const tabs = [
   "Home",
@@ -17,10 +18,16 @@ const tabs = [
 interface NavbarProps {
   selectedTab: string;
   setSelectedTab: (tab: string) => void;
+  onLogout: () => void;
 }
 
-export default function Navbar({ selectedTab, setSelectedTab }: NavbarProps) {
+export default function Navbar({ selectedTab, setSelectedTab, onLogout }: NavbarProps) {
   const router = useRouter();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    onLogout();
+  };
 
   return (
     <nav className="bg-white shadow-md w-full">
@@ -41,6 +48,12 @@ export default function Navbar({ selectedTab, setSelectedTab }: NavbarProps) {
                 {tab}
               </button>
             ))}
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-md bg-red-500 text-white hover:bg-red-600"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </div>
