@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar'
 import Home from '../components/Home'
 import PerformanceComparator from '../components/PerformanceComparator'
@@ -12,18 +12,31 @@ import LiveCharts from '../components/LiveCharts'
 import Contact from '../components/Contact'
 import LoginForm from '../components/LoginForm'
 import SignupForm from '../components/SignupForm'
+import { supabase } from '../lib/supabaseClient'
 
 export default function MainPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isSignup, setIsSignup] = useState(false)
   const [selectedTab, setSelectedTab] = useState('Home')
+  const [showConfirmationMessage, setShowConfirmationMessage] = useState(false)
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setIsAuthenticated(true)
+      }
+    }
+    checkUser()
+  }, [])
 
   const handleLogin = () => {
     setIsAuthenticated(true)
   }
 
   const handleSignup = () => {
-    setIsAuthenticated(true)
+    setShowConfirmationMessage(true)
+    setIsSignup(false)
   }
 
   const handleLogout = () => {
@@ -54,6 +67,22 @@ export default function MainPage() {
   }
 
   if (!isAuthenticated) {
+    if (showConfirmationMessage) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-100">
+          <div className="text-center">
+            <p className="text-xl text-gray-700 mb-4">Please confirm your email address.</p>
+            <button
+              onClick={() => setShowConfirmationMessage(false)}
+              className="bg-blue-500 text-white p-2 rounded"
+            >
+              Login
+            </button>
+          </div>
+        </div>
+      )
+    }
+
     return isSignup ? (
       <SignupForm onSignup={handleSignup} />
     ) : (
