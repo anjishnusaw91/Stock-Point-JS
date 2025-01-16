@@ -139,44 +139,50 @@ const GeneralForecaster: React.FC = () => {
         label: {
           style: {
             color: '#fff',
-            background: '#775DD0'
+            background: '#775DD0',
           },
-          text: 'Forecast Start'
-        }
-      }]
+          text: 'Forecast Start',
+        },
+      }],
     } : undefined,
   };
 
   const getChartSeries = () => {
     if (!forecastData) return [];
+
     return [
       {
-        name: 'Historical',
+        name: 'Actual Price',
+        type: 'line',
         data: forecastData.historical.dates.map((date, index) => ({
           x: new Date(date).getTime(),
-          y: forecastData.historical.prices[index],
+          y: Number(forecastData.historical.prices[index].toFixed(2)),
         })),
       },
       {
-        name: 'Forecast',
+        name: 'Training Prediction',
+        type: 'line',
+        data: forecastData.historical.dates.map((date, index) => ({
+          x: new Date(date).getTime(),
+          y: forecastData.historical.predictions[index] 
+            ? Number(forecastData.historical.predictions[index]?.toFixed(2))
+            : null,
+        })).filter(point => point.y !== null),
+      },
+      {
+        name: 'Future Forecast',
+        type: 'line',
         data: forecastData.forecast.dates.map((date, index) => ({
           x: new Date(date).getTime(),
-          y: forecastData.forecast.prices[index],
-        })),
-      },
-      {
-        name: 'Predictions',
-        data: forecastData.historical.dates.map((date, index) => ({
-          x: new Date(date).getTime(),
-          y: forecastData.historical.predictions[index],
+          y: Number(forecastData.forecast.prices[index].toFixed(2)),
         })),
       },
     ];
   };
 
   return (
-    <div className="p-4 bg-gray-50 min-h-screen flex flex-col">
-      <div className="max-w-full mx-auto space-y-4 flex-grow">
+    <div className="p-4">
+      <div className="max-w-7xl mx-auto">
         <h2 className="text-2xl font-bold mb-6">General Stock Forecaster</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -197,7 +203,7 @@ const GeneralForecaster: React.FC = () => {
               ))}
             </select>
           </div>
-          <div>
+    <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Prediction Days (1-30)
             </label>
