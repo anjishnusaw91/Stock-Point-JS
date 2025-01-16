@@ -52,7 +52,7 @@ export default function Home() {
           </p>
           <div className="flex flex-col md:flex-row items-start md:items-center text-sm text-gray-500 space-y-2 md:space-y-0">
             <span className="md:mr-4">📧 support@stockpoint.com</span>
-            <span>📱 +1 (555) 123-4567</span>
+{/*             <span>📱 +1 (555) 123-4567</span> */}
           </div>
         </div>
       </div>
