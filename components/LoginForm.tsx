@@ -26,8 +26,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToSignup }) => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-md">
+    <div className="flex items-center justify-center min-h-screen bg-gray-100 px-4">
+      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-md w-full max-w-md">
         <h2 className="text-2xl font-bold mb-4">Login</h2>
         {error && <p className="text-red-500 mb-4">{error}</p>}
         <div className="mb-4">

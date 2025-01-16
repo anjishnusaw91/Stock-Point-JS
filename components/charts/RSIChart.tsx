@@ -49,9 +49,11 @@ export const RSIChart: React.FC<RSIChartProps> = ({ data }) => {
   ];
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow">
+    <div className="bg-white p-4 rounded-lg shadow w-full overflow-x-auto">
       <h3 className="text-lg font-semibold mb-2">RSI (14)</h3>
-      <Chart options={getChartOptions()} series={getSeries()} type="line" height={200} />
+      <div className="min-w-[600px]">
+        <Chart options={getChartOptions()} series={getSeries()} type="line" height={200} />
+      </div>
     </div>
   );
 }; 
