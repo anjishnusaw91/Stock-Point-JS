@@ -30,27 +30,27 @@ const LiveCharts: React.FC = () => {
             <h1 className="text-2xl font-bold">Live Market Data</h1>
             <p className="text-sm text-gray-500">Feature coming soon...</p>
           </div>
-          <select
-            value={selectedSymbol}
-            onChange={(e) => setSelectedSymbol(e.target.value)}
+            <select
+              value={selectedSymbol}
+              onChange={(e) => setSelectedSymbol(e.target.value)}
             className="rounded-md border border-gray-300 p-2"
-          >
-            <option value="">Select a stock</option>
+            >
+              <option value="">Select a stock</option>
             {STOCK_SYMBOLS.map((stock) => (
-              <option key={stock.symbol} value={stock.symbol}>
+                <option key={stock.symbol} value={stock.symbol}>
                 {stock.name} ({stock.symbol})
-              </option>
-            ))}
-          </select>
-        </div>
-
+                </option>
+              ))}
+            </select>
+          </div>
+          
         <div className="bg-white p-4 rounded-lg shadow">
           <div className="flex justify-center items-center h-96">
             <p className="text-gray-500">
               Live chart functionality is under development. Please check back later.
             </p>
+            </div>
           </div>
-        </div>
       </div>
     </div>
   );

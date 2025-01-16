@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Navbar from '../components/Navbar'
 import Home from '../components/Home'
 import PerformanceComparator from '../components/PerformanceComparator'
@@ -11,15 +10,15 @@ import TechnicalAnalysis from '../components/TechnicalAnalysis'
 import GeneralForecaster from '../components/GeneralForecaster'
 import LiveCharts from '../components/LiveCharts'
 import Contact from '../components/Contact'
+import LoginForm from '../components/LoginForm'
 
 export default function MainPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [selectedTab, setSelectedTab] = useState('Home')
-  const router = useRouter()
 
-  useEffect(() => {
+  const handleLogin = () => {
     setIsAuthenticated(true)
-  }, [])
+  }
 
   const renderContent = () => {
     switch (selectedTab) {
@@ -42,6 +41,10 @@ export default function MainPage() {
       default:
         return <Home />
     }
+  }
+
+  if (!isAuthenticated) {
+    return <LoginForm onLogin={handleLogin} />
   }
 
   return (
