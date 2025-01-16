@@ -48,9 +48,9 @@ export default function MainPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 flex flex-col">
       <Navbar selectedTab={selectedTab} setSelectedTab={setSelectedTab} />
-      <main className="container mx-auto mt-8 px-4">
+      <main className="flex-grow">
         {renderContent()}
       </main>
     </div>

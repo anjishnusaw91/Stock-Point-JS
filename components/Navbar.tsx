@@ -23,8 +23,8 @@ export default function Navbar({ selectedTab, setSelectedTab }: NavbarProps) {
   const router = useRouter();
 
   return (
-    <nav className="bg-white shadow-md">
-      <div className="container mx-auto px-4">
+    <nav className="bg-white shadow-md w-full">
+      <div className="px-4">
         <div className="flex justify-between items-center py-4">
           <h1 className="text-2xl font-bold text-gray-800">Stock Point</h1>
           <div className="flex space-x-4">
