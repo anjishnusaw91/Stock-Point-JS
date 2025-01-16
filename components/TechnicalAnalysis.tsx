@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { ApexOptions } from 'apexcharts';
 import { TECHNICAL_INDICATORS } from '../constants/indicators';
-import { StockSymbol, TechnicalData, Indicator } from '@/types/technical';
+import { StockSymbol, TechnicalData } from '@/types/technical';
 import { ChartControls } from './charts/ChartControls';
 import { PriceChart } from './charts/PriceChart';
 import { IndicatorChart } from './charts/IndicatorChart';
@@ -75,8 +74,8 @@ const TechnicalAnalysis: React.FC = () => {
   };
 
   return (
-    <div className="p-4 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto space-y-4">
+    <div className="p-4 bg-gray-50 min-h-screen flex flex-col">
+      <div className="max-w-full mx-auto space-y-4 flex-grow">
         <h1 className="text-2xl font-bold text-gray-900">Technical Analysis</h1>
         
         <ChartControls
