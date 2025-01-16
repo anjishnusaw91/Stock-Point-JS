@@ -37,7 +37,7 @@ export default function Navbar({ selectedTab, setSelectedTab, onLogout }: Navbar
 
     const getUserEmail = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      if (user?.email) {
         setUserEmail(user.email);
       }
     };
