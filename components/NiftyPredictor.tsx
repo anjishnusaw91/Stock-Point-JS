@@ -183,7 +183,7 @@ const NiftyPredictor: React.FC = () => {
     <div className="p-4">
       <div className="bg-white rounded-lg shadow-lg p-6">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Nifty Predictor</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Statistical Predictor</h2>
           <p className="text-gray-600">Statistical Analysis & Prediction</p>
         </div>
 
