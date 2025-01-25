@@ -13,7 +13,7 @@ const tabs = [
   { name: "Performance", id: "Performance Comparator" },
   { name: "Market Profile", id: "Market Profile" },
   { name: "Technical Analysis", id: "Technical Analysis" },
-  { name: "NIFTY Predictor", id: "NIFTY predictor" },
+  { name: "Stat Predictor", id: "NIFTY predictor" },
   { name: "Forecaster", id: "General Forecaster" },
   { name: "Contact", id: "Contact" }
 ];
