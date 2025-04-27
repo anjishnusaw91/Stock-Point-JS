@@ -175,62 +175,62 @@ export default function Home({ setParentTab }: HomeProps) {
         return;
       }
       
-      // Check if Supabase client has database methods
-      if (!supabase.from) {
-        console.error('Supabase client missing database methods');
+      // Try to fetch portfolios using try/catch instead of checking for method existence
+      try {
+        // First get all portfolios for this user
+        const { data: portfolios, error: portfolioError } = await supabase
+          .from('portfolios')
+          .select('id')
+          .eq('user_id', user.id);
+        
+        if (portfolioError) {
+          console.error('Error fetching portfolios:', portfolioError);
+          throw portfolioError;
+        }
+        
+        if (!portfolios || portfolios.length === 0) {
+          setPortfolioData({
+            stocksCount: 0,
+            totalValue: 0,
+            portfolioStocks: []
+          });
+          return;
+        }
+        
+        // Then get all portfolio stocks for these portfolios
+        const portfolioIds = portfolios.map(p => p.id);
+        
+        const { data: stocks, error: stocksError } = await supabase
+          .from('portfolio_stocks')
+          .select('*')
+          .in('portfolio_id', portfolioIds);
+        
+        if (stocksError) {
+          console.error('Error fetching portfolio stocks:', stocksError);
+          throw stocksError;
+        }
+        
+        // Calculate total value from stocks
+        const totalValue = stocks ? stocks.reduce((sum, stock) => 
+          sum + (stock.quantity * stock.purchase_price), 0) : 0;
+        
+        console.log(`Found ${stocks?.length || 0} stocks in ${portfolios.length} portfolios`);
+        
+        // Update portfolio data state with correct count
+        setPortfolioData({
+          stocksCount: stocks?.length || 0,
+          totalValue: totalValue,
+          portfolioStocks: stocks || []
+        });
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+        // Use fallback mock data
         setPortfolioData({
           stocksCount: 6, // Default count for mock data
           totalValue: 0,
           portfolioStocks: []
         });
-        return;
       }
-      
-      // First get all portfolios for this user
-      const { data: portfolios, error: portfolioError } = await supabase
-        .from('portfolios')
-        .select('id')
-        .eq('user_id', user.id);
-      
-      if (portfolioError) {
-        console.error('Error fetching portfolios:', portfolioError);
-        return;
-      }
-      
-      if (!portfolios || portfolios.length === 0) {
-        setPortfolioData({
-          stocksCount: 0,
-          totalValue: 0,
-          portfolioStocks: []
-        });
-        return;
-      }
-      
-      // Then get all portfolio stocks for these portfolios
-      const portfolioIds = portfolios.map(p => p.id);
-      
-      const { data: stocks, error: stocksError } = await supabase
-        .from('portfolio_stocks')
-        .select('*')
-        .in('portfolio_id', portfolioIds);
-      
-      if (stocksError) {
-        console.error('Error fetching portfolio stocks:', stocksError);
-        return;
-      }
-      
-      // Calculate total value from stocks
-      const totalValue = stocks ? stocks.reduce((sum, stock) => 
-        sum + (stock.quantity * stock.purchase_price), 0) : 0;
-      
-      console.log(`Found ${stocks?.length || 0} stocks in ${portfolios.length} portfolios`);
-      
-      // Update portfolio data state with correct count
-      setPortfolioData({
-        stocksCount: stocks?.length || 0,
-        totalValue: totalValue,
-        portfolioStocks: stocks || []
-      });
     } catch (error) {
       console.error('Error in fetchPortfolioData:', error);
       // Fallback to static data when there's an error
@@ -306,52 +306,52 @@ export default function Home({ setParentTab }: HomeProps) {
         return;
       }
       
-      // Check if Supabase client has database methods
-      if (!supabase.from) {
-        console.error('Supabase client missing database methods');
+      // Try to fetch watchlists using try/catch instead of checking for method existence
+      try {
+        // First get all watchlists for this user
+        const { data: watchlists, error: watchlistError } = await supabase
+          .from('watchlists')
+          .select('id')
+          .eq('user_id', user.id);
+        
+        if (watchlistError) {
+          console.error('Error fetching watchlists:', watchlistError);
+          throw watchlistError;
+        }
+        
+        if (!watchlists || watchlists.length === 0) {
+          setWatchlistData({
+            alertsCount: 0
+          });
+          return;
+        }
+        
+        // Then get all watchlist stocks for these watchlists
+        const watchlistIds = watchlists.map(w => w.id);
+        
+        const { data: stocks, error: stocksError } = await supabase
+          .from('watchlist_stocks')
+          .select('*')
+          .in('watchlist_id', watchlistIds);
+        
+        if (stocksError) {
+          console.error('Error fetching watchlist stocks:', stocksError);
+          throw stocksError;
+        }
+        
+        console.log(`Found ${stocks?.length || 0} stocks in ${watchlists.length} watchlists`);
+        
+        // Update watchlist data
+        setWatchlistData({
+          alertsCount: stocks?.length || 0
+        });
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+        // Use fallback mock data
         setWatchlistData({
           alertsCount: WATCHLIST_ALERTS.length // Use mock data length
         });
-        return;
       }
-      
-      // First get all watchlists for this user
-      const { data: watchlists, error: watchlistError } = await supabase
-        .from('watchlists')
-        .select('id')
-        .eq('user_id', user.id);
-      
-      if (watchlistError) {
-        console.error('Error fetching watchlists:', watchlistError);
-        return;
-      }
-      
-      if (!watchlists || watchlists.length === 0) {
-        setWatchlistData({
-          alertsCount: 0
-        });
-        return;
-      }
-      
-      // Then get all watchlist stocks for these watchlists
-      const watchlistIds = watchlists.map(w => w.id);
-      
-      const { data: stocks, error: stocksError } = await supabase
-        .from('watchlist_stocks')
-        .select('*')
-        .in('watchlist_id', watchlistIds);
-      
-      if (stocksError) {
-        console.error('Error fetching watchlist stocks:', stocksError);
-        return;
-      }
-      
-      console.log(`Found ${stocks?.length || 0} stocks in ${watchlists.length} watchlists`);
-      
-      // Update watchlist data
-      setWatchlistData({
-        alertsCount: stocks?.length || 0
-      });
     } catch (error) {
       console.error('Error in fetchWatchlistData:', error);
       // Fallback to mock data when there's an error
@@ -464,12 +464,17 @@ export default function Home({ setParentTab }: HomeProps) {
     
     const marketHoursInterval = setInterval(checkMarketHours, 60000); // Check every minute
     
+    // Use a fallback polling mechanism by default
+    let pollInterval: NodeJS.Timeout | null = null;
+    
     // Set up real-time subscription for portfolio changes (both tables)
     let portfolioSubscription: any = null;
     let watchlistSubscription: any = null;
     
+    // Attempt to set up Supabase realtime subscriptions using try/catch
     try {
-      if (supabase.channel) {
+      // Create subscriptions, wrapping each in a try/catch to handle possible errors
+      try {
         portfolioSubscription = supabase
           .channel('portfolio-changes')
           .on('postgres_changes', 
@@ -488,7 +493,6 @@ export default function Home({ setParentTab }: HomeProps) {
           )
           .subscribe();
           
-        // Set up real-time subscription for watchlist changes (both tables)
         watchlistSubscription = supabase
           .channel('watchlist-changes')
           .on('postgres_changes', 
@@ -506,33 +510,48 @@ export default function Home({ setParentTab }: HomeProps) {
             }
           )
           .subscribe();
-      } else {
-        console.log('Realtime subscriptions not available - using polling instead');
-        // Fallback to polling for updates every 10 seconds
-        const pollInterval = setInterval(() => {
+        
+        console.log('Successfully set up realtime subscriptions');
+      } catch (subscriptionError) {
+        console.error('Failed to set up subscriptions, falling back to polling:', subscriptionError);
+        // If subscriptions fail, use polling as fallback
+        pollInterval = setInterval(() => {
           if (isMounted) {
             fetchPortfolioData();
             fetchWatchlistData();
           }
         }, 10000);
-        
-        // Clear the polling interval on unmount
-        return () => {
-          isMounted = false;
-          clearInterval(marketHoursInterval);
-          clearInterval(pollInterval);
-        };
       }
     } catch (error) {
-      console.error('Error setting up realtime subscriptions:', error);
+      console.error('Error setting up data sync:', error);
+      // Fallback to polling if anything goes wrong
+      pollInterval = setInterval(() => {
+        if (isMounted) {
+          fetchPortfolioData();
+          fetchWatchlistData();
+        }
+      }, 10000);
     }
       
     // Clean up subscriptions and prevent state updates after unmount
     return () => {
       isMounted = false;
       clearInterval(marketHoursInterval);
-      if (portfolioSubscription?.unsubscribe) portfolioSubscription.unsubscribe();
-      if (watchlistSubscription?.unsubscribe) watchlistSubscription.unsubscribe();
+      
+      // Clean up polling if it was used
+      if (pollInterval) clearInterval(pollInterval);
+      
+      // Clean up subscriptions if they were created
+      try {
+        if (portfolioSubscription) {
+          portfolioSubscription.unsubscribe?.();
+        }
+        if (watchlistSubscription) {
+          watchlistSubscription.unsubscribe?.();
+        }
+      } catch (cleanupError) {
+        console.error('Error cleaning up subscriptions:', cleanupError);
+      }
     };
   }, [fetchPortfolioData, fetchWatchlistData]);
   
