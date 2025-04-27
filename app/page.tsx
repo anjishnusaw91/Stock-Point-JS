@@ -14,6 +14,7 @@ import LoginForm from '../components/LoginForm'
 import SignupForm from '../components/SignupForm'
 import PortfolioManager from '../components/PortfolioManager'
 import WatchlistManager from '../components/WatchlistManager'
+import UserProfile from '../components/UserProfile'
 import { supabase } from '../lib/supabaseClient'
 
 export default function MainPage() {
@@ -67,6 +68,8 @@ export default function MainPage() {
         return <WatchlistManager />
       case 'Contact':
         return <Contact />
+      case 'User Profile':
+        return <UserProfile />
       default:
         return <Home />
     }

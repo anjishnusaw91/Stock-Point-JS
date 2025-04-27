@@ -23,14 +23,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Get session from local storage
-    const currentSession = supabase.auth.getSession();
-    setSession(currentSession as any);
-    setUser(currentSession ? (currentSession as any).user : null);
-    setLoading(false);
+    const fetchSession = async () => {
+      console.log('Fetching auth session...');
+      const { data } = await supabase.auth.getSession();
+      console.log('Current session:', data);
+      setSession(data.session);
+      setUser(data.session?.user ?? null);
+      setLoading(false);
+    };
+
+    fetchSession();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, currentSession: Session | null) => {
+        console.log('Auth state changed:', event, currentSession?.user?.id);
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         setLoading(false);
