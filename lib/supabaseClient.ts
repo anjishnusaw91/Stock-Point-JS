@@ -19,7 +19,8 @@ try {
   supabaseClient = {
     auth: {
       getUser: async () => ({ data: { user: null }, error: null }),
-      signOut: async () => ({ error: null })
+      signOut: async () => ({ error: null }),
+      signInWithPassword: async () => ({ data: { user: null }, error: null })
     }
   };
 }
@@ -31,7 +32,8 @@ export const supabase = supabaseClient;
 export const mockSupabase = {
   auth: {
     getUser: async () => ({ data: { user: null }, error: null }),
-    signOut: async () => ({ error: null })
+    signOut: async () => ({ error: null }),
+    signInWithPassword: async () => ({ data: { user: null }, error: null })
   }
 };
 

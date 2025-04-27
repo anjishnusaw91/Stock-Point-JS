@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, Portfolio, PortfolioStock } from '@/lib/supabase';
-import yahooFinance from 'yahoo-finance2';
 import { FiTrendingUp, FiTrendingDown, FiAlertTriangle, FiCheck, FiPieChart, FiBarChart2 } from 'react-icons/fi';
 import { FaTrash } from 'react-icons/fa';
 
@@ -178,8 +177,8 @@ const PortfolioManager: React.FC = () => {
       
       console.log('Fetching current prices for symbols:', uniqueSymbols);
       
-      // Try the bulk quotes endpoint first
-      let quotes;
+      // Initialize quotes and fallback flag
+      let quotes: any[] = [];
       let usedFallback = false;
       
       try {
@@ -196,10 +195,10 @@ const PortfolioManager: React.FC = () => {
         }
         
         const data = await response.json();
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to fetch stock quotes');
-        }
-        
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch stock quotes');
+      }
+      
         quotes = data.data;
       } catch (error) {
         // Fallback to individual live API calls if bulk endpoint fails
@@ -251,7 +250,7 @@ const PortfolioManager: React.FC = () => {
         // Make sure we get the current price from the API data or fallback to 0
         const currentPrice = stockData.price || 0;
         
-        // Calculate values based on current price and quantity
+        // Calculate total value, profit/loss
         const totalValue = stock.quantity * currentPrice;
         const totalCost = stock.quantity * stock.purchase_price;
         const profitLoss = totalValue - totalCost;
@@ -266,10 +265,6 @@ const PortfolioManager: React.FC = () => {
           dayHigh: stockData.dayHigh,
           dayLow: stockData.dayLow,
           volume: stockData.volume,
-          beta: stockData.beta,
-          pe: stockData.pe,
-          fiftyDayAvg: stockData.fiftyDayAvg,
-          twoHundredDayAvg: stockData.twoHundredDayAvg,
           totalValue,
           profitLoss,
           profitLossPercent
@@ -312,7 +307,7 @@ const PortfolioManager: React.FC = () => {
         
       if (error) throw error;
       
-      // Reset form
+      // Reset the form
       setNewPortfolioName('');
       setNewPortfolioDescription('');
       setShowNewPortfolioForm(false);
@@ -345,7 +340,7 @@ const PortfolioManager: React.FC = () => {
         
       if (error) throw error;
       
-      // Reset form
+      // Reset the form
       setNewStockSymbol('');
       setNewStockQuantity(0);
       setNewStockPrice(0);
@@ -440,6 +435,8 @@ const PortfolioManager: React.FC = () => {
       }
       
       setPortfolioAnalysis(data.data);
+      // Switch to analysis tab after successful analysis
+      setActiveTab('analysis');
     } catch (err) {
       console.error('Error analyzing portfolio:', err);
       setAnalysisError('Failed to analyze portfolio. Please try again later.');
@@ -590,58 +587,56 @@ const PortfolioManager: React.FC = () => {
         </div>
         
         {/* Top Performers */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Performers</h3>
-            
-            <div className="space-y-4">
-              {summary.top_performers.map((stock) => (
-                <div key={stock.symbol} className="flex items-center">
-                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                    <FiTrendingUp className="text-green-600" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900">{stock.name || stock.symbol}</p>
-                    <p className="text-xs text-gray-500">{stock.quantity} shares at ₹{stock.current_price.toFixed(2)}</p>
-                  </div>
-                  <div className="ml-auto text-right">
-                    <p className="text-sm font-medium text-green-600">+{stock.profit_loss_percent.toFixed(2)}%</p>
-                    <p className="text-xs text-gray-500">₹{stock.profit_loss.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
-                  </div>
-                </div>
-              ))}
-              
-              {summary.top_performers.length === 0 && (
-                <p className="text-gray-500 text-sm">No performers to display</p>
-              )}
-            </div>
-          </div>
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Performers</h3>
           
-          {/* Worst Performers */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Underperforming</h3>
-            
-            <div className="space-y-4">
-              {summary.worst_performers.map((stock) => (
-                <div key={stock.symbol} className="flex items-center">
-                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                    <FiTrendingDown className="text-red-600" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900">{stock.name || stock.symbol}</p>
-                    <p className="text-xs text-gray-500">{stock.quantity} shares at ₹{stock.current_price.toFixed(2)}</p>
-                  </div>
-                  <div className="ml-auto text-right">
-                    <p className="text-sm font-medium text-red-600">{stock.profit_loss_percent.toFixed(2)}%</p>
-                    <p className="text-xs text-gray-500">₹{stock.profit_loss.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
-                  </div>
+          <div className="space-y-4">
+            {summary.top_performers.map((stock) => (
+              <div key={stock.symbol} className="flex items-center">
+                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                  <FiTrendingUp className="text-green-600" />
                 </div>
-              ))}
-              
-              {summary.worst_performers.length === 0 && (
-                <p className="text-gray-500 text-sm">No underperformers to display</p>
-              )}
-            </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-gray-900">{stock.name || stock.symbol}</p>
+                  <p className="text-xs text-gray-500">{stock.quantity} shares at ₹{stock.current_price.toFixed(2)}</p>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-sm font-medium text-green-600">+{stock.profit_loss_percent.toFixed(2)}%</p>
+                  <p className="text-xs text-gray-500">₹{stock.profit_loss.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
+                </div>
+              </div>
+            ))}
+            
+            {summary.top_performers.length === 0 && (
+              <p className="text-gray-500 text-sm">No performers to display</p>
+            )}
+          </div>
+        </div>
+        
+        {/* Worst Performers */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Underperforming</h3>
+          
+          <div className="space-y-4">
+            {summary.worst_performers.map((stock) => (
+              <div key={stock.symbol} className="flex items-center">
+                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <FiTrendingDown className="text-red-600" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-gray-900">{stock.name || stock.symbol}</p>
+                  <p className="text-xs text-gray-500">{stock.quantity} shares at ₹{stock.current_price.toFixed(2)}</p>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-sm font-medium text-red-600">{stock.profit_loss_percent.toFixed(2)}%</p>
+                  <p className="text-xs text-gray-500">₹{stock.profit_loss.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
+                </div>
+              </div>
+            ))}
+            
+            {summary.worst_performers.length === 0 && (
+              <p className="text-gray-500 text-sm">No underperformers to display</p>
+            )}
           </div>
         </div>
       </div>
@@ -779,250 +774,234 @@ const PortfolioManager: React.FC = () => {
                   </div>
                 </div>
                 
-                {/* Portfolio Summary */}
-                <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="bg-white p-4 rounded-lg shadow">
-                    <p className="text-sm text-gray-500">Total Value</p>
-                    <p className="text-xl font-bold text-gray-800">
-                      ₹{currentPortfolio.totalValue.toLocaleString(undefined, {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0
-                      })}
-                    </p>
-                  </div>
-                  
-                  <div className="bg-white p-4 rounded-lg shadow">
-                    <p className="text-sm text-gray-500">Total Cost</p>
-                    <p className="text-xl font-bold text-gray-800">
-                      ₹{currentPortfolio.totalCost.toLocaleString(undefined, {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0
-                      })}
-                    </p>
-                  </div>
-                  
-                  <div className={`p-4 rounded-lg shadow ${
-                    currentPortfolio.totalProfitLoss >= 0 ? 'bg-green-50' : 'bg-red-50'
-                  }`}>
-                    <p className="text-sm text-gray-500">Profit/Loss</p>
-                    <p className={`text-xl font-bold ${
-                      currentPortfolio.totalProfitLoss >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      ₹{currentPortfolio.totalProfitLoss.toLocaleString(undefined, {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0
-                      })}
-                    </p>
-                  </div>
-                  
-                  <div className={`p-4 rounded-lg shadow ${
-                    currentPortfolio.totalProfitLossPercent >= 0 ? 'bg-green-50' : 'bg-red-50'
-                  }`}>
-                    <p className="text-sm text-gray-500">Return %</p>
-                    <p className={`text-xl font-bold ${
-                      currentPortfolio.totalProfitLossPercent >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {currentPortfolio.totalProfitLossPercent >= 0 ? '+' : ''}
-                      {currentPortfolio.totalProfitLossPercent.toFixed(2)}%
-                    </p>
+                {/* Tab Navigation */}
+                <div className="mb-4 border-b border-gray-200">
+                  <div className="flex">
+                    <button
+                      onClick={() => setActiveTab('holdings')}
+                      className={`py-2 px-4 font-medium text-sm ${
+                        activeTab === 'holdings'
+                          ? 'border-b-2 border-blue-500 text-blue-600'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Holdings
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('analysis')}
+                      className={`py-2 px-4 font-medium text-sm ${
+                        activeTab === 'analysis'
+                          ? 'border-b-2 border-blue-500 text-blue-600'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Analysis
+                    </button>
                   </div>
                 </div>
                 
-                {/* Stocks Table */}
-                <div className="mb-6">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-lg font-semibold">Portfolio Holdings</h4>
-                    <button 
-                      onClick={() => setShowAddStockForm(!showAddStockForm)} 
-                      className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition text-sm"
-                    >
-                      {showAddStockForm ? 'Cancel' : 'Add Stock'}
-                    </button>
-                  </div>
-                  
-                  {/* Add Stock Form */}
-                  {showAddStockForm && (
-                    <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                      <h5 className="text-md font-semibold mb-3">Add New Stock to Portfolio</h5>
-                      <form onSubmit={handleAddStock}>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Symbol
-                            </label>
-                            <select
-                              value={newStockSymbol}
-                              onChange={(e) => setNewStockSymbol(e.target.value)}
-                              className="w-full p-2 border rounded-md"
-                              required
-                            >
-                              <option value="">Select a stock</option>
-                              {symbols.map((stock) => (
-                                <option key={stock.symbol} value={stock.symbol}>
-                                  {stock.name} ({stock.symbol})
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Quantity
-                            </label>
-                            <input
-                              type="number"
-                              min="0.01"
-                              step="0.01"
-                              value={newStockQuantity || ''}
-                              onChange={(e) => setNewStockQuantity(parseFloat(e.target.value))}
-                              className="w-full p-2 border rounded-md"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Purchase Price (₹)
-                            </label>
-                            <input
-                              type="number"
-                              min="0.01"
-                              step="0.01"
-                              value={newStockPrice || ''}
-                              onChange={(e) => setNewStockPrice(parseFloat(e.target.value))}
-                              className="w-full p-2 border rounded-md"
-                              required
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Purchase Date
-                            </label>
-                            <input
-                              type="date"
-                              value={newStockDate}
-                              onChange={(e) => setNewStockDate(e.target.value)}
-                              className="w-full p-2 border rounded-md"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Notes (Optional)
-                            </label>
-                            <textarea
-                              value={newStockNotes}
-                              onChange={(e) => setNewStockNotes(e.target.value)}
-                              className="w-full p-2 border rounded-md"
-                              rows={1}
-                            />
-                          </div>
-                        </div>
-                        <button 
-                          type="submit" 
-                          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
-                        >
-                          Add to Portfolio
-                        </button>
-                      </form>
-                    </div>
-                  )}
-                  
-                  {currentPortfolio.stocks.length === 0 ? (
-                    <div className="bg-gray-50 p-6 rounded-lg text-center">
-                      <p className="text-gray-600">No stocks in this portfolio yet.</p>
+                {/* Tab Content */}
+                {activeTab === 'holdings' ? (
+                  <div className="mb-6">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-lg font-semibold">Portfolio Holdings</h4>
                       <button 
-                        onClick={() => setShowAddStockForm(true)} 
-                        className="mt-3 bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition text-sm"
+                        onClick={() => setShowAddStockForm(!showAddStockForm)} 
+                        className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition text-sm"
                       >
-                        Add Your First Stock
+                        {showAddStockForm ? 'Cancel' : 'Add Stock'}
                       </button>
                     </div>
-                  ) : (
-                    <div className="overflow-x-auto bg-white rounded-lg shadow">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Price</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Market Value</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Profit/Loss</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Return %</th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {currentPortfolio.stocks.map((stock) => (
-                            <tr key={stock.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-4 whitespace-nowrap">
-                                <div className="font-medium text-gray-900">{stock.symbol}</div>
-                                <div className="text-xs text-gray-500">
-                                  {stock.purchase_date && new Date(stock.purchase_date).toLocaleDateString()}
-                                </div>
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                                {stock.quantity}
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                                ₹{stock.purchase_price.toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2
-                                })}
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div className={`${
-                                  (stock.currentPrice || 0) >= stock.purchase_price ? 'text-green-600' : 'text-red-600'
-                                }`}>
-                                  ₹{(stock.currentPrice || 0).toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                  })}
-                                </div>
-                                {stock.dayHigh && stock.dayLow && (
-                                  <div className="text-xs text-gray-500">
-                                    H: ₹{stock.dayHigh.toFixed(2)} L: ₹{stock.dayLow.toFixed(2)}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                                ₹{(stock.totalValue || 0).toLocaleString(undefined, {
-                                  minimumFractionDigits: 0,
-                                  maximumFractionDigits: 0
-                                })}
-                              </td>
-                              <td className={`px-4 py-4 whitespace-nowrap text-right text-sm font-medium ${
-                                (stock.profitLoss || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {(stock.profitLoss || 0) >= 0 ? '+' : ''}
-                                ₹{(stock.profitLoss || 0).toLocaleString(undefined, {
-                                  minimumFractionDigits: 0,
-                                  maximumFractionDigits: 0
-                                })}
-                              </td>
-                              <td className={`px-4 py-4 whitespace-nowrap text-right text-sm font-medium ${
-                                (stock.profitLossPercent || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {(stock.profitLossPercent || 0) >= 0 ? '+' : ''}
-                                {(stock.profitLossPercent || 0).toFixed(2)}%
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-center text-sm">
-                                <button
-                                  onClick={() => handleRemoveStock(stock.id)}
-                                  className="text-red-500 hover:text-red-700 transition"
-                                  title="Remove from portfolio"
-                                >
-                                  <FaTrash />
-                                </button>
-                              </td>
+                    
+                    {showAddStockForm && (
+                      <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                        <h5 className="text-md font-semibold mb-3">Add New Stock to Portfolio</h5>
+                        <form onSubmit={handleAddStock}>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Symbol
+                              </label>
+                              <select
+                                value={newStockSymbol}
+                                onChange={(e) => setNewStockSymbol(e.target.value)}
+                                className="w-full p-2 border rounded-md"
+                                required
+                              >
+                                <option value="">Select a stock</option>
+                                {symbols.map((stock) => (
+                                  <option key={stock.symbol} value={stock.symbol}>
+                                    {stock.name} ({stock.symbol})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Quantity
+                              </label>
+                              <input
+                                type="number"
+                                value={newStockQuantity || ''}
+                                onChange={(e) => setNewStockQuantity(parseInt(e.target.value) || 0)}
+                                className="w-full p-2 border rounded-md"
+                                min="1"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Purchase Price (₹)
+                              </label>
+                              <input
+                                type="number"
+                                value={newStockPrice || ''}
+                                onChange={(e) => setNewStockPrice(parseFloat(e.target.value) || 0)}
+                                className="w-full p-2 border rounded-md"
+                                min="0.01"
+                                step="0.01"
+                                required
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Purchase Date
+                              </label>
+                              <input
+                                type="date"
+                                value={newStockDate}
+                                onChange={(e) => setNewStockDate(e.target.value)}
+                                className="w-full p-2 border rounded-md"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Notes (Optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={newStockNotes}
+                                onChange={(e) => setNewStockNotes(e.target.value)}
+                                className="w-full p-2 border rounded-md"
+                                placeholder="e.g., Long-term investment"
+                              />
+                            </div>
+                          </div>
+                          
+                          <button 
+                            type="submit" 
+                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
+                          >
+                            Add to Portfolio
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                    
+                    {currentPortfolio.stocks.length === 0 ? (
+                      <div className="bg-gray-50 p-6 rounded-lg text-center">
+                        <p className="text-gray-600">No stocks in this portfolio yet.</p>
+                        <button 
+                          onClick={() => setShowAddStockForm(true)} 
+                          className="mt-3 bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition text-sm"
+                        >
+                          Add Your First Stock
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto bg-white rounded-lg shadow">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Symbol
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Quantity
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Buy Price
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Current
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                P/L
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Total Value
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Actions
+                              </th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {currentPortfolio.stocks.map((stock) => (
+                              <tr key={stock.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {stock.symbol}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {stock.quantity}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  ₹{stock.purchase_price.toFixed(2)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {stock.currentPrice ? `₹${stock.currentPrice.toFixed(2)}` : '-'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span className={((stock.profitLossPercent as number | undefined) ?? 0) > 0 ? 'text-green-600' : ((stock.profitLossPercent as number | undefined) ?? 0) < 0 ? 'text-red-600' : 'text-gray-500'}>
+                                    {stock.profitLossPercent !== undefined ? `${stock.profitLossPercent.toFixed(2)}%` : '-'}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {stock.totalValue ? `₹${stock.totalValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <button
+                                    onClick={() => handleRemoveStock(stock.id)}
+                                    className="text-red-500 hover:text-red-700"
+                                    title="Remove stock"
+                                  >
+                                    <FaTrash />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-gray-50">
+                            <tr>
+                              <td colSpan={2} className="px-6 py-3 text-sm font-medium text-gray-900">
+                                Total
+                              </td>
+                              <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                ₹{currentPortfolio.totalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                              </td>
+                              <td></td>
+                              <td className="px-6 py-3 whitespace-nowrap text-sm font-medium">
+                                <span className={((currentPortfolio.totalProfitLossPercent as number) ?? 0) > 0 ? 'text-green-600' : ((currentPortfolio.totalProfitLossPercent as number) ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}>
+                                  {currentPortfolio.totalProfitLossPercent.toFixed(2)}%
+                                </span>
+                              </td>
+                              <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                ₹{currentPortfolio.totalValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                              </td>
+                              <td></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  renderAnalysisTab()
+                )}
               </div>
             )}
           </div>

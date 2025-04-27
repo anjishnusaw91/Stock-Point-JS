@@ -52,12 +52,6 @@ const nextConfig = {
   images: {
     domains: ['images.unsplash.com'],
   },
-  
-  // Turn off automatic static optimization for API routes
-  // This ensures API routes are always handled as dynamic routes
-  api: {
-    externalResolver: true,
-  },
 };
 
 module.exports = nextConfig; 

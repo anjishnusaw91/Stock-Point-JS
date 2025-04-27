@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Menu, X, Search, User, LogOut, ChevronDown, BarChart, Activity, LineChart, PieChart, Briefcase, BookOpen } from 'lucide-react';
+import { Menu, X, Search, User as UserIcon, LogOut, ChevronDown, BarChart, Activity, LineChart, PieChart, Briefcase, BookOpen } from 'lucide-react';
 import { supabase, mockSupabase } from '../lib/supabaseClient';
+import { User } from '@supabase/supabase-js';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { StockPointLogo } from './StockPointLogo';
@@ -70,8 +71,8 @@ export default function Navbar({ selectedTab, setSelectedTab, onLogout }: Navbar
         // Try to use real Supabase client first, fallback to mock if needed
         const client = mockSupabase || supabase;
         const { data: { user } } = await client.auth.getUser();
-        if (user?.email) {
-          setUserEmail(user.email);
+        if ((user as any)?.email) {
+          setUserEmail((user as any).email);
         }
       } catch (error) {
         console.error('Error getting user email:', error);
@@ -226,7 +227,7 @@ export default function Navbar({ selectedTab, setSelectedTab, onLogout }: Navbar
                   className="rounded-full text-gray-700 hover:bg-gray-100"
                   onClick={() => setSelectedTab('User Profile')}
                 >
-                  <User className="h-5 w-5" />
+                  <UserIcon className="h-5 w-5" />
                 </Button>
                 {userEmail && (
                   <div className="absolute right-0 mt-2 w-48 py-2 bg-white rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -394,7 +395,7 @@ export default function Navbar({ selectedTab, setSelectedTab, onLogout }: Navbar
           <div className="pt-4 pb-3 border-t border-gray-200">
             <div className="flex items-center px-5">
               <div className="flex-shrink-0">
-                <User className="h-8 w-8 text-gray-600" />
+                <UserIcon className="h-8 w-8 text-gray-600" />
               </div>
               <div className="ml-3">
                 <div className="text-base font-medium text-gray-800">User Profile</div>
