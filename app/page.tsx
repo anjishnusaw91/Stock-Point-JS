@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Navbar from '../components/Navbar'
 import Home from '../components/Home'
 import PerformanceComparator from '../components/PerformanceComparator'
@@ -18,10 +19,26 @@ import UserProfile from '../components/UserProfile'
 import { supabase, mockSupabase } from '../lib/supabaseClient'
 
 export default function MainPage() {
+  const searchParams = useSearchParams();
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isSignup, setIsSignup] = useState(false)
   const [selectedTab, setSelectedTab] = useState('Home')
   const [showConfirmationMessage, setShowConfirmationMessage] = useState(false)
+
+  // Handle tab changes
+  const handleTabChange = (tab: string) => {
+    console.log(`Tab changed to: ${tab}`);
+    setSelectedTab(tab);
+  };
+
+  useEffect(() => {
+    // Check if there's a tab parameter in the URL
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      console.log(`Setting selected tab to: ${tabParam}`);
+      setSelectedTab(tabParam);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -53,31 +70,43 @@ export default function MainPage() {
   }
 
   const renderContent = () => {
-    switch (selectedTab) {
-      case 'Home':
-        return <Home />
-      case 'Performance Comparator':
-        return <PerformanceComparator />
-      case 'Market Profile':
-        return <MarketProfile />
-      case 'NIFTY predictor':
-        return <NiftyPredictor />
-      case 'Technical Analysis':
-        return <TechnicalAnalysis />
-      case 'General Forecaster':
-        return <GeneralForecaster />
-      case 'Live Charts':
-        return <LiveCharts />
-      case 'Portfolio Manager':
-        return <PortfolioManager />
-      case 'Watchlist Manager':
-        return <WatchlistManager />
-      case 'Contact':
-        return <Contact />
-      case 'User Profile':
-        return <UserProfile />
-      default:
-        return <Home />
+    try {
+      switch (selectedTab) {
+        case 'Home':
+          return <Home setParentTab={handleTabChange} />
+        case 'Performance Comparator':
+          return <PerformanceComparator />
+        case 'Market Profile':
+          return <MarketProfile />
+        case 'NIFTY predictor':
+          return <NiftyPredictor />
+        case 'Technical Analysis':
+          return <TechnicalAnalysis />
+        case 'General Forecaster':
+          return <GeneralForecaster />
+        case 'Live Charts':
+          return <LiveCharts />
+        case 'Portfolio Manager':
+          return <PortfolioManager />
+        case 'Watchlist Manager':
+          return <WatchlistManager />
+        case 'Contact':
+          return <Contact />
+        case 'User Profile':
+          return <UserProfile />
+        case 'Market News':
+          // Fallback to Home if Market News component doesn't exist
+          return <Home setParentTab={handleTabChange} />
+        case 'User Activity':
+          // Fallback to Home if User Activity component doesn't exist
+          return <Home setParentTab={handleTabChange} />
+        default:
+          console.log(`Unknown tab: ${selectedTab}, defaulting to Home`);
+          return <Home setParentTab={handleTabChange} />
+      }
+    } catch (error) {
+      console.error(`Error rendering content for tab ${selectedTab}:`, error);
+      return <div className="p-4 bg-red-100 text-red-800 rounded-lg">Error loading content</div>;
     }
   }
 
@@ -113,7 +142,7 @@ export default function MainPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar selectedTab={selectedTab} setSelectedTab={setSelectedTab} onLogout={handleLogout} />
+      <Navbar selectedTab={selectedTab} setSelectedTab={handleTabChange} onLogout={handleLogout} />
       <main className="flex-grow p-0 md:p-4 mt-4">
         {renderContent()}
       </main>

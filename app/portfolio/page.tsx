@@ -1,12 +1,12 @@
-'use client';
+'use client'
 
-import { Suspense } from 'react';
-import { useRouter } from 'next/navigation';
-import LiveCharts from "../../components/LiveCharts";
-import Navbar from '../../components/Navbar';
-import { handleNavigation } from '../helpers/navigation';
+import { Suspense } from 'react'
+import { useRouter } from 'next/navigation'
+import PortfolioManager from '../../components/PortfolioManager'
+import Navbar from '../../components/Navbar'
+import { handleNavigation } from '../helpers/navigation'
 
-export default function LiveChartsPage() {
+export default function PortfolioPage() {
   const router = useRouter();
   
   const handleTabChange = (tab: string) => {
@@ -21,15 +21,15 @@ export default function LiveChartsPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar 
-        selectedTab="Live Charts" 
+        selectedTab="Portfolio Manager" 
         setSelectedTab={handleTabChange}
         onLogout={handleLogout}
       />
       <main className="flex-grow p-0 md:p-4 mt-4">
-        <Suspense fallback={<div className="p-4 text-center">Loading charts...</div>}>
-          <LiveCharts />
+        <Suspense fallback={<div className="p-4 text-center">Loading portfolio...</div>}>
+          <PortfolioManager />
         </Suspense>
       </main>
     </div>
-  );
+  )
 } 
