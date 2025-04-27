@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Profile } from '@/types/supabase';
 
 // Initialize Supabase admin client with the service role key
 // This bypasses RLS policies
@@ -35,21 +36,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'User ID is required' }, { status: 400 });
     }
 
-    // Create a simplified update object with just the essential fields
-    // This reduces the chance of schema validation errors
-    // IMPORTANT: Removed updated_at as it doesn't exist in the schema
-    const updateData = {
+    // Create a strongly typed update object
+    const updateData: Profile = {
       id: profileData.id,
       full_name: profileData.full_name || null
     };
 
     // Add other fields if they exist in the request
-    if (profileData.phone !== undefined) updateData.phone = profileData.phone;
-    if (profileData.address !== undefined) updateData.address = profileData.address;
-    if (profileData.bio !== undefined) updateData.bio = profileData.bio;
-    if (profileData.investment_style !== undefined) updateData.investment_style = profileData.investment_style;
-    if (profileData.risk_tolerance !== undefined) updateData.risk_tolerance = profileData.risk_tolerance;
-    if (profileData.email !== undefined) updateData.email = profileData.email;
+    if ('phone' in profileData && profileData.phone !== undefined) updateData.phone = profileData.phone;
+    if ('address' in profileData && profileData.address !== undefined) updateData.address = profileData.address;
+    if ('bio' in profileData && profileData.bio !== undefined) updateData.bio = profileData.bio;
+    if ('investment_style' in profileData && profileData.investment_style !== undefined) updateData.investment_style = profileData.investment_style;
+    if ('risk_tolerance' in profileData && profileData.risk_tolerance !== undefined) updateData.risk_tolerance = profileData.risk_tolerance;
+    if ('email' in profileData && profileData.email !== undefined) updateData.email = profileData.email;
 
     console.log('Applying update with data:', updateData);
 
