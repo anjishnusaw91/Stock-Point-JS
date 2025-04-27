@@ -155,8 +155,36 @@ export default function Home({ setParentTab }: HomeProps) {
   // Fetch user portfolio data
   const fetchPortfolioData = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // Get the current user
+      let user;
+      try {
+        const { data } = await supabase.auth.getUser();
+        user = data.user;
+      } catch (authError) {
+        console.error('Auth error:', authError);
+        return;
+      }
+      
+      if (!user) {
+        console.log('No authenticated user found');
+        setPortfolioData({
+          stocksCount: 0,
+          totalValue: 0,
+          portfolioStocks: []
+        });
+        return;
+      }
+      
+      // Check if Supabase client has database methods
+      if (!supabase.from) {
+        console.error('Supabase client missing database methods');
+        setPortfolioData({
+          stocksCount: 6, // Default count for mock data
+          totalValue: 0,
+          portfolioStocks: []
+        });
+        return;
+      }
       
       // First get all portfolios for this user
       const { data: portfolios, error: portfolioError } = await supabase
@@ -205,8 +233,9 @@ export default function Home({ setParentTab }: HomeProps) {
       });
     } catch (error) {
       console.error('Error in fetchPortfolioData:', error);
+      // Fallback to static data when there's an error
       setPortfolioData({
-        stocksCount: 0,
+        stocksCount: 6, // Default count for mock data
         totalValue: 0,
         portfolioStocks: []
       });
@@ -259,8 +288,32 @@ export default function Home({ setParentTab }: HomeProps) {
   // Fetch watchlist data
   const fetchWatchlistData = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // Get the current user
+      let user;
+      try {
+        const { data } = await supabase.auth.getUser();
+        user = data.user;
+      } catch (authError) {
+        console.error('Auth error:', authError);
+        return;
+      }
+      
+      if (!user) {
+        console.log('No authenticated user found');
+        setWatchlistData({
+          alertsCount: 0
+        });
+        return;
+      }
+      
+      // Check if Supabase client has database methods
+      if (!supabase.from) {
+        console.error('Supabase client missing database methods');
+        setWatchlistData({
+          alertsCount: WATCHLIST_ALERTS.length // Use mock data length
+        });
+        return;
+      }
       
       // First get all watchlists for this user
       const { data: watchlists, error: watchlistError } = await supabase
@@ -301,8 +354,9 @@ export default function Home({ setParentTab }: HomeProps) {
       });
     } catch (error) {
       console.error('Error in fetchWatchlistData:', error);
+      // Fallback to mock data when there's an error
       setWatchlistData({
-        alertsCount: 0
+        alertsCount: WATCHLIST_ALERTS.length
       });
     }
   }, []);
@@ -411,49 +465,74 @@ export default function Home({ setParentTab }: HomeProps) {
     const marketHoursInterval = setInterval(checkMarketHours, 60000); // Check every minute
     
     // Set up real-time subscription for portfolio changes (both tables)
-    const portfolioSubscription = supabase
-      .channel('portfolio-changes')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'portfolios' },
-        (payload) => {
-          console.log('Portfolio table change detected:', payload);
-          if (isMounted) fetchPortfolioData();
-        }
-      )
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'portfolio_stocks' },
-        (payload) => {
-          console.log('Portfolio stock change detected:', payload);
-          if (isMounted) fetchPortfolioData();
-        }
-      )
-      .subscribe();
-      
-    // Set up real-time subscription for watchlist changes (both tables)
-    const watchlistSubscription = supabase
-      .channel('watchlist-changes')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'watchlists' },
-        (payload) => {
-          console.log('Watchlist table change detected:', payload);
-          if (isMounted) fetchWatchlistData();
-        }
-      )
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'watchlist_stocks' },
-        (payload) => {
-          console.log('Watchlist stock change detected:', payload);
-          if (isMounted) fetchWatchlistData();
-        }
-      )
-      .subscribe();
+    let portfolioSubscription: any = null;
+    let watchlistSubscription: any = null;
+    
+    try {
+      if (supabase.channel) {
+        portfolioSubscription = supabase
+          .channel('portfolio-changes')
+          .on('postgres_changes', 
+            { event: '*', schema: 'public', table: 'portfolios' },
+            (payload) => {
+              console.log('Portfolio table change detected:', payload);
+              if (isMounted) fetchPortfolioData();
+            }
+          )
+          .on('postgres_changes', 
+            { event: '*', schema: 'public', table: 'portfolio_stocks' },
+            (payload) => {
+              console.log('Portfolio stock change detected:', payload);
+              if (isMounted) fetchPortfolioData();
+            }
+          )
+          .subscribe();
+          
+        // Set up real-time subscription for watchlist changes (both tables)
+        watchlistSubscription = supabase
+          .channel('watchlist-changes')
+          .on('postgres_changes', 
+            { event: '*', schema: 'public', table: 'watchlists' },
+            (payload) => {
+              console.log('Watchlist table change detected:', payload);
+              if (isMounted) fetchWatchlistData();
+            }
+          )
+          .on('postgres_changes', 
+            { event: '*', schema: 'public', table: 'watchlist_stocks' },
+            (payload) => {
+              console.log('Watchlist stock change detected:', payload);
+              if (isMounted) fetchWatchlistData();
+            }
+          )
+          .subscribe();
+      } else {
+        console.log('Realtime subscriptions not available - using polling instead');
+        // Fallback to polling for updates every 10 seconds
+        const pollInterval = setInterval(() => {
+          if (isMounted) {
+            fetchPortfolioData();
+            fetchWatchlistData();
+          }
+        }, 10000);
+        
+        // Clear the polling interval on unmount
+        return () => {
+          isMounted = false;
+          clearInterval(marketHoursInterval);
+          clearInterval(pollInterval);
+        };
+      }
+    } catch (error) {
+      console.error('Error setting up realtime subscriptions:', error);
+    }
       
     // Clean up subscriptions and prevent state updates after unmount
     return () => {
       isMounted = false;
       clearInterval(marketHoursInterval);
-      portfolioSubscription.unsubscribe();
-      watchlistSubscription.unsubscribe();
+      if (portfolioSubscription?.unsubscribe) portfolioSubscription.unsubscribe();
+      if (watchlistSubscription?.unsubscribe) watchlistSubscription.unsubscribe();
     };
   }, [fetchPortfolioData, fetchWatchlistData]);
   
