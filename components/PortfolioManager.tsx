@@ -150,7 +150,7 @@ const PortfolioManager: React.FC = () => {
       
       // Create a price lookup map
       const priceMap = quotes.reduce((map, quote) => {
-        map[quote.symbol.replace('.NS', '')] = quote.price;
+        map[quote.symbol.replace('.NS', '')] = quote.price || 0;
         return map;
       }, {} as Record<string, number>);
       

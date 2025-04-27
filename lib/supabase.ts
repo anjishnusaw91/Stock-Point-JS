@@ -23,6 +23,11 @@ export type PortfolioStock = {
   purchase_price: number;
   purchase_date: string;
   notes: string | null;
+  // Extended properties for UI calculations
+  currentPrice?: number;
+  totalValue?: number;
+  profitLoss?: number;
+  profitLossPercent?: number;
 };
 
 export type Watchlist = {
@@ -38,8 +43,18 @@ export type WatchlistStock = {
   watchlist_id: string;
   symbol: string;
   added_at: string;
+  date_added?: string; // Alternative field name that might be used
   target_price: number | null;
   notes: string | null;
+  // Extended properties for UI display
+  currentPrice?: number;
+  previousClose?: number;
+  change?: number;
+  changePercent?: number;
+  volume?: number;
+  avgVolume?: number;
+  high?: number;
+  low?: number;
 };
 
 export type User = {
