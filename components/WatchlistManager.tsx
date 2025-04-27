@@ -103,9 +103,27 @@ const WatchlistManager: React.FC = () => {
     setUser(authUser);
     
     if (authUser) {
+      console.log('Authenticated user found, fetching watchlists');
       fetchWatchlistsBasic();
     } else {
+      console.log('No authenticated user found');
       setLoading(false);
+      // If we've been waiting too long, try to proceed anyway
+      if (loading && localStorage.getItem(WATCHLIST_CACHE_KEY)) {
+        console.log('No user but cache exists - using cached data');
+        try {
+          const cachedData = JSON.parse(localStorage.getItem(WATCHLIST_CACHE_KEY) || '{}');
+          if (cachedData.watchlists && cachedData.watchlists.length > 0) {
+            console.log('Using cached watchlists');
+            setWatchlists(cachedData.watchlists || []);
+            if (cachedData.activeWatchlist) {
+              setActiveWatchlist(cachedData.activeWatchlist);
+            }
+          }
+        } catch (err) {
+          console.error('Error loading cached data:', err);
+        }
+      }
     }
     
     // Safety timeout to prevent infinite loading state
@@ -115,7 +133,7 @@ const WatchlistManager: React.FC = () => {
         setLoading(false);
         setError('Loading took too long. Please try refreshing the page.');
       }
-    }, 20000); // Increased to 20 seconds timeout
+    }, 45000); // Increased to 45 seconds timeout
     
     return () => clearTimeout(safetyTimeout);
   }, [authUser]);
@@ -149,6 +167,7 @@ const WatchlistManager: React.FC = () => {
   const fetchWatchlistsBasic = async () => {
     if (!user) {
       console.log('No user available, skipping fetchWatchlists');
+      setLoading(false);
       return;
     }
     
@@ -164,7 +183,10 @@ const WatchlistManager: React.FC = () => {
         .select('*')
         .eq('user_id', user.id);
         
-      if (watchlistsError) throw watchlistsError;
+      if (watchlistsError) {
+        console.error('Supabase error fetching watchlists:', watchlistsError);
+        throw watchlistsError;
+      }
       
       console.log('Watchlists retrieved:', watchlistsData?.length || 0);
       
@@ -177,48 +199,65 @@ const WatchlistManager: React.FC = () => {
       
       // Fetch watchlist stocks for each watchlist with placeholder data
       console.log('Fetching basic stock data for each watchlist');
-      const watchlistsWithBasicStocks = await Promise.all(
-        watchlistsData.map(async (watchlist) => {
-          console.log(`Fetching stocks for watchlist: ${watchlist.id}`);
-          const { data: stocksData, error: stocksError } = await supabase
-            .from('watchlist_stocks')
-            .select('*')
-            .eq('watchlist_id', watchlist.id);
-            
-          if (stocksError) throw stocksError;
-          
-          console.log(`Found ${stocksData?.length || 0} stocks in watchlist ${watchlist.id}`);
-          
-          // Set the active watchlist to the first one if not already set
-          if (!activeWatchlist) setActiveWatchlist(watchlist.id);
-          
-          // Create stocks with placeholder data
-          const stocksWithPlaceholders = (stocksData || []).map(stock => ({
-            ...stock,
-            currentPrice: 0,
-            previousClose: 0,
-            change: 0,
-            changePercent: 0,
-            volume: 0,
-            avgVolume: 0,
-            high: 0,
-            low: 0,
-            isLoading: true
-          }));
-          
-          return {
-            ...watchlist,
-            stocks: stocksWithPlaceholders
-          };
-        })
-      );
-      
-      console.log('All basic watchlists processed', watchlistsWithBasicStocks.length);
-      setWatchlists(watchlistsWithBasicStocks);
-      setLoading(false);
-      
-      // Phase 2: Fetch real stock data
-      fetchRealStockData(watchlistsWithBasicStocks);
+      try {
+        const watchlistsWithBasicStocks = await Promise.all(
+          watchlistsData.map(async (watchlist) => {
+            console.log(`Fetching stocks for watchlist: ${watchlist.id}`);
+            try {
+              const { data: stocksData, error: stocksError } = await supabase
+                .from('watchlist_stocks')
+                .select('*')
+                .eq('watchlist_id', watchlist.id);
+                
+              if (stocksError) {
+                console.error(`Error fetching stocks for watchlist ${watchlist.id}:`, stocksError);
+                throw stocksError;
+              }
+              
+              console.log(`Found ${stocksData?.length || 0} stocks in watchlist ${watchlist.id}`);
+              
+              // Set the active watchlist to the first one if not already set
+              if (!activeWatchlist) setActiveWatchlist(watchlist.id);
+              
+              // Create stocks with placeholder data
+              const stocksWithPlaceholders = (stocksData || []).map(stock => ({
+                ...stock,
+                currentPrice: 0,
+                previousClose: 0,
+                change: 0,
+                changePercent: 0,
+                volume: 0,
+                avgVolume: 0,
+                high: 0,
+                low: 0,
+                isLoading: true
+              }));
+              
+              return {
+                ...watchlist,
+                stocks: stocksWithPlaceholders
+              };
+            } catch (err) {
+              console.error(`Error processing watchlist ${watchlist.id}:`, err);
+              return {
+                ...watchlist,
+                stocks: []
+              };
+            }
+          })
+        );
+        
+        console.log('All basic watchlists processed', watchlistsWithBasicStocks.length);
+        setWatchlists(watchlistsWithBasicStocks);
+        setLoading(false);
+        
+        // Phase 2: Fetch real stock data
+        fetchRealStockData(watchlistsWithBasicStocks);
+      } catch (err) {
+        console.error('Error processing watchlists:', err);
+        setError('Error processing watchlists');
+        setLoading(false);
+      }
       
     } catch (err) {
       console.error('Error fetching basic watchlists:', err);
@@ -240,13 +279,19 @@ const WatchlistManager: React.FC = () => {
         basicWatchlists.map(async (watchlist) => {
           if (!watchlist.stocks.length) return watchlist;
           
-          // Fetch real stock data
-          const stocksWithPrices = await fetchStockData(watchlist.stocks);
-          
-          return {
-            ...watchlist,
-            stocks: stocksWithPrices
-          };
+          try {
+            // Fetch real stock data
+            const stocksWithPrices = await fetchStockData(watchlist.stocks);
+            
+            return {
+              ...watchlist,
+              stocks: stocksWithPrices
+            };
+          } catch (error) {
+            console.error(`Error fetching prices for watchlist ${watchlist.id}:`, error);
+            // Return watchlist with original stocks if there's an error
+            return watchlist;
+          }
         })
       );
       
