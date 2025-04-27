@@ -5,10 +5,15 @@ import yahooFinance from 'yahoo-finance2';
 const cache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_TTL = 60000; // 1 minute in milliseconds
 
+// Add export config to mark as dynamic
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url);
-    const symbol = url.searchParams.get('symbol');
+    // Get URL and parse query parameters
+    const { searchParams } = new URL(req.url);
+    const symbol = searchParams.get('symbol');
     
     if (!symbol) {
       return NextResponse.json({ 

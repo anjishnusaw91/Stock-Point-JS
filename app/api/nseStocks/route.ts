@@ -8,6 +8,10 @@ let cachedSymbols: any[] | null = null;
 let lastCacheTime = 0;
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
+// Add export config to mark as dynamic
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET() {
   try {
     // Check if we have cached data that's still valid

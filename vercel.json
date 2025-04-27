@@ -1,0 +1,12 @@
+{
+  "buildCommand": "next build",
+  "framework": "nextjs",
+  "regions": ["bom1"],
+  "version": 2,
+  "functions": {
+    "app/api/**/*.ts": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  }
+} 

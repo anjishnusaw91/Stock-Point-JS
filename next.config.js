@@ -40,6 +40,24 @@ const nextConfig = {
       },
     ];
   },
+  // Enable React Strict Mode for better development experience
+  reactStrictMode: true,
+  
+  // Configure Vercel deployment settings
+  experimental: {
+    serverComponentsExternalPackages: ['yahooFinance', 'yahoo-finance2']
+  },
+  
+  // Configure image domains if needed
+  images: {
+    domains: ['images.unsplash.com'],
+  },
+  
+  // Turn off automatic static optimization for API routes
+  // This ensures API routes are always handled as dynamic routes
+  api: {
+    externalResolver: true,
+  },
 };
 
 module.exports = nextConfig; 

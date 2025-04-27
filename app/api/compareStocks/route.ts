@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import yahooFinance from 'yahoo-finance2';
 
+// Add export config to mark as dynamic
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(req: Request) {
   try {
     const { symbols, startDate, endDate } = await req.json();
