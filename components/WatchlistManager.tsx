@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '@/lib/supabase';
 import yahooFinance from 'yahoo-finance2';
 import { FaEye, FaEyeSlash, FaArrowUp, FaArrowDown, FaTrash, FaChartLine } from 'react-icons/fa';
 import { FiTrendingUp, FiTrendingDown, FiAlertTriangle, FiBarChart2 } from 'react-icons/fi';
@@ -78,19 +78,26 @@ const WatchlistManager: React.FC = () => {
   const { user: authUser } = useAuth();
 
   useEffect(() => {
-    // Get the current user
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      if (user) {
-        fetchWatchlists();
-      } else {
-        setLoading(false);
-      }
-    };
+    // Use authUser directly instead of fetching from Supabase again
+    setUser(authUser);
     
-    getUser();
-  }, []);
+    if (authUser) {
+      fetchWatchlists();
+    } else {
+      setLoading(false);
+    }
+    
+    // Safety timeout to prevent infinite loading state
+    const safetyTimeout = setTimeout(() => {
+      if (loading) {
+        console.log('Safety timeout triggered: forcing loading state to false');
+        setLoading(false);
+        setError('Loading took too long. Please try refreshing the page.');
+      }
+    }, 10000); // 10 seconds timeout
+    
+    return () => clearTimeout(safetyTimeout);
+  }, [authUser]);
   
   useEffect(() => {
     if (activeWatchlist && watchlists.length > 0) {
@@ -102,13 +109,18 @@ const WatchlistManager: React.FC = () => {
   }, [activeWatchlist, watchlists]);
 
   const fetchWatchlists = async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('No user available, skipping fetchWatchlists');
+      return;
+    }
     
+    console.log('Starting fetchWatchlists', { userId: user.id });
     setLoading(true);
     setError(null);
     
     try {
       // Fetch watchlists
+      console.log('Fetching watchlists for user:', user.id);
       // @ts-ignore - Supabase mock implementation type issues
       const { data: watchlistsData, error: watchlistsError } = await supabase
         .from('watchlists')
@@ -117,15 +129,20 @@ const WatchlistManager: React.FC = () => {
         
       if (watchlistsError) throw watchlistsError;
       
-      if (!watchlistsData.length) {
+      console.log('Watchlists retrieved:', watchlistsData?.length || 0);
+      
+      if (!watchlistsData || !watchlistsData.length) {
+        console.log('No watchlists found for user');
         setWatchlists([]);
         setLoading(false);
         return;
       }
       
       // Fetch watchlist stocks for each watchlist
+      console.log('Fetching stocks for each watchlist');
       const watchlistsWithStocks = await Promise.all(
         watchlistsData.map(async (watchlist) => {
+          console.log(`Fetching stocks for watchlist: ${watchlist.id}`);
           const { data: stocksData, error: stocksError } = await supabase
             .from('watchlist_stocks')
             .select('*')
@@ -133,11 +150,14 @@ const WatchlistManager: React.FC = () => {
             
           if (stocksError) throw stocksError;
           
+          console.log(`Found ${stocksData?.length || 0} stocks in watchlist ${watchlist.id}`);
+          
           // Set the active watchlist to the first one if not already set
           if (!activeWatchlist) setActiveWatchlist(watchlist.id);
           
           // Fetch current prices for stocks
-          const stocksWithPrices = await fetchStockData(stocksData);
+          console.log('Fetching price data for stocks');
+          const stocksWithPrices = await fetchStockData(stocksData || []);
           
           return {
             ...watchlist,
@@ -146,11 +166,13 @@ const WatchlistManager: React.FC = () => {
         })
       );
       
+      console.log('All watchlists processed successfully', watchlistsWithStocks.length);
       setWatchlists(watchlistsWithStocks);
     } catch (err) {
       console.error('Error fetching watchlists:', err);
       setError('Failed to load watchlists');
     } finally {
+      console.log('Finished fetchWatchlists, setting loading to false');
       setLoading(false);
     }
   };
