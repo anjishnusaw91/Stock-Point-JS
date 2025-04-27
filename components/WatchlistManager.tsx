@@ -57,9 +57,13 @@ interface WatchlistRecommendations {
   top_recommendations: StockRecommendation[];
 }
 
+// Local cache key
+const WATCHLIST_CACHE_KEY = 'stockpoint_watchlist_cache';
+
 const WatchlistManager: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pricesLoading, setPricesLoading] = useState(false);
   const [watchlists, setWatchlists] = useState<WatchlistWithStocks[]>([]);
   const [activeWatchlist, setActiveWatchlist] = useState<string | null>(null);
   const [showNewWatchlistForm, setShowNewWatchlistForm] = useState(false);
@@ -77,12 +81,29 @@ const WatchlistManager: React.FC = () => {
   
   const { user: authUser } = useAuth();
 
+  // Load cached data if available
+  useEffect(() => {
+    try {
+      const cachedData = localStorage.getItem(WATCHLIST_CACHE_KEY);
+      if (cachedData) {
+        const parsed = JSON.parse(cachedData);
+        console.log('Loaded watchlist data from cache');
+        setWatchlists(parsed.watchlists || []);
+        if (parsed.activeWatchlist) {
+          setActiveWatchlist(parsed.activeWatchlist);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading cached watchlist data:', err);
+    }
+  }, []);
+
   useEffect(() => {
     // Use authUser directly instead of fetching from Supabase again
     setUser(authUser);
     
     if (authUser) {
-      fetchWatchlists();
+      fetchWatchlistsBasic();
     } else {
       setLoading(false);
     }
@@ -94,10 +115,25 @@ const WatchlistManager: React.FC = () => {
         setLoading(false);
         setError('Loading took too long. Please try refreshing the page.');
       }
-    }, 10000); // 10 seconds timeout
+    }, 20000); // Increased to 20 seconds timeout
     
     return () => clearTimeout(safetyTimeout);
   }, [authUser]);
+  
+  // Cache watchlist data when it changes
+  useEffect(() => {
+    if (watchlists.length > 0) {
+      try {
+        localStorage.setItem(WATCHLIST_CACHE_KEY, JSON.stringify({
+          watchlists,
+          activeWatchlist,
+          timestamp: Date.now()
+        }));
+      } catch (err) {
+        console.error('Error caching watchlist data:', err);
+      }
+    }
+  }, [watchlists, activeWatchlist]);
   
   useEffect(() => {
     if (activeWatchlist && watchlists.length > 0) {
@@ -108,20 +144,21 @@ const WatchlistManager: React.FC = () => {
     }
   }, [activeWatchlist, watchlists]);
 
-  const fetchWatchlists = async () => {
+  // New two-phase loading approach
+  // Phase 1: Fetch basic watchlist structure with placeholder stock data
+  const fetchWatchlistsBasic = async () => {
     if (!user) {
       console.log('No user available, skipping fetchWatchlists');
       return;
     }
     
-    console.log('Starting fetchWatchlists', { userId: user.id });
+    console.log('Starting basic watchlist fetch', { userId: user.id });
     setLoading(true);
     setError(null);
     
     try {
       // Fetch watchlists
       console.log('Fetching watchlists for user:', user.id);
-      // @ts-ignore - Supabase mock implementation type issues
       const { data: watchlistsData, error: watchlistsError } = await supabase
         .from('watchlists')
         .select('*')
@@ -138,9 +175,9 @@ const WatchlistManager: React.FC = () => {
         return;
       }
       
-      // Fetch watchlist stocks for each watchlist
-      console.log('Fetching stocks for each watchlist');
-      const watchlistsWithStocks = await Promise.all(
+      // Fetch watchlist stocks for each watchlist with placeholder data
+      console.log('Fetching basic stock data for each watchlist');
+      const watchlistsWithBasicStocks = await Promise.all(
         watchlistsData.map(async (watchlist) => {
           console.log(`Fetching stocks for watchlist: ${watchlist.id}`);
           const { data: stocksData, error: stocksError } = await supabase
@@ -155,9 +192,56 @@ const WatchlistManager: React.FC = () => {
           // Set the active watchlist to the first one if not already set
           if (!activeWatchlist) setActiveWatchlist(watchlist.id);
           
-          // Fetch current prices for stocks
-          console.log('Fetching price data for stocks');
-          const stocksWithPrices = await fetchStockData(stocksData || []);
+          // Create stocks with placeholder data
+          const stocksWithPlaceholders = (stocksData || []).map(stock => ({
+            ...stock,
+            currentPrice: 0,
+            previousClose: 0,
+            change: 0,
+            changePercent: 0,
+            volume: 0,
+            avgVolume: 0,
+            high: 0,
+            low: 0,
+            isLoading: true
+          }));
+          
+          return {
+            ...watchlist,
+            stocks: stocksWithPlaceholders
+          };
+        })
+      );
+      
+      console.log('All basic watchlists processed', watchlistsWithBasicStocks.length);
+      setWatchlists(watchlistsWithBasicStocks);
+      setLoading(false);
+      
+      // Phase 2: Fetch real stock data
+      fetchRealStockData(watchlistsWithBasicStocks);
+      
+    } catch (err) {
+      console.error('Error fetching basic watchlists:', err);
+      setError('Failed to load watchlists');
+      setLoading(false);
+    }
+  };
+  
+  // Phase 2: Update with real stock data
+  const fetchRealStockData = async (basicWatchlists) => {
+    if (!basicWatchlists || !basicWatchlists.length) return;
+    
+    console.log('Starting real stock data fetch');
+    setPricesLoading(true);
+    
+    try {
+      // Process each watchlist
+      const updatedWatchlists = await Promise.all(
+        basicWatchlists.map(async (watchlist) => {
+          if (!watchlist.stocks.length) return watchlist;
+          
+          // Fetch real stock data
+          const stocksWithPrices = await fetchStockData(watchlist.stocks);
           
           return {
             ...watchlist,
@@ -166,15 +250,19 @@ const WatchlistManager: React.FC = () => {
         })
       );
       
-      console.log('All watchlists processed successfully', watchlistsWithStocks.length);
-      setWatchlists(watchlistsWithStocks);
+      console.log('All real stock data processed');
+      setWatchlists(updatedWatchlists);
     } catch (err) {
-      console.error('Error fetching watchlists:', err);
-      setError('Failed to load watchlists');
+      console.error('Error fetching real stock data:', err);
+      // No error state here since we already have basic data
     } finally {
-      console.log('Finished fetchWatchlists, setting loading to false');
-      setLoading(false);
+      setPricesLoading(false);
     }
+  };
+
+  const fetchWatchlists = async () => {
+    // Keep this for compatibility, now just calls the two-phase approach
+    fetchWatchlistsBasic();
   };
   
   const fetchStockData = async (stocks: WatchlistStock[]) => {
@@ -209,17 +297,18 @@ const WatchlistManager: React.FC = () => {
     } catch (err) {
       console.error('Error fetching stock data:', err);
       
-      // If API fails, return stocks with zero values
+      // If API fails, return stocks with zero values but preserve original data
       return stocks.map(stock => ({
         ...stock,
-        currentPrice: 0,
-        previousClose: 0,
-        change: 0,
-        changePercent: 0,
-        volume: 0,
-        avgVolume: 0,
-        high: 0,
-        low: 0
+        currentPrice: stock.currentPrice || 0,
+        previousClose: stock.previousClose || 0,
+        change: stock.change || 0,
+        changePercent: stock.changePercent || 0,
+        volume: stock.volume || 0,
+        avgVolume: stock.avgVolume || 0,
+        high: stock.high || 0,
+        low: stock.low || 0,
+        isLoading: false
       }));
     }
   };
@@ -587,6 +676,7 @@ const WatchlistManager: React.FC = () => {
         
         {loading ? (
           <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mr-3"></div>
             <div className="text-xl">Loading watchlists...</div>
           </div>
         ) : error ? (
@@ -606,6 +696,13 @@ const WatchlistManager: React.FC = () => {
           </div>
         ) : (
           <div>
+            {pricesLoading && (
+              <div className="bg-blue-50 p-2 mb-4 rounded-lg text-blue-700 flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                <span>Updating stock prices...</span>
+              </div>
+            )}
+            
             {/* Watchlist Selector */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
