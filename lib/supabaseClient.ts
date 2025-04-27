@@ -20,7 +20,8 @@ try {
     auth: {
       getUser: async () => ({ data: { user: null }, error: null }),
       signOut: async () => ({ error: null }),
-      signInWithPassword: async () => ({ data: { user: null }, error: null })
+      signInWithPassword: async () => ({ data: { user: null }, error: null }),
+      signUp: async () => ({ data: { user: null }, error: null })
     }
   };
 }
@@ -33,7 +34,8 @@ export const mockSupabase = {
   auth: {
     getUser: async () => ({ data: { user: null }, error: null }),
     signOut: async () => ({ error: null }),
-    signInWithPassword: async () => ({ data: { user: null }, error: null })
+    signInWithPassword: async () => ({ data: { user: null }, error: null }),
+    signUp: async () => ({ data: { user: null }, error: null })
   }
 };
 
