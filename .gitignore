@@ -70,3 +70,5 @@ node_modules/
 .dataconnect
 
 .vercel
+.env.local
+.env.local

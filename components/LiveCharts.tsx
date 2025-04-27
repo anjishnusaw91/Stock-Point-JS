@@ -280,27 +280,27 @@ const LiveCharts: React.FC = () => {
                   <p className="text-gray-500">{data.data.symbol}</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold">₹{data.data.currentPrice.toFixed(2)}</div>
-                  {formatPriceChange(data.data.change, data.data.changePercent)}
+                  <div className="text-2xl font-bold">₹{(data.data.currentPrice ?? 0).toFixed(2)}</div>
+                  {formatPriceChange(data.data.change ?? 0, data.data.changePercent ?? 0)}
                 </div>
               </div>
 
               <div className="grid grid-cols-4 gap-4 mt-4">
                 <div>
                   <p className="text-sm text-gray-500">Open</p>
-                  <p className="font-medium">₹{data.data.open.toFixed(2)}</p>
+                  <p className="font-medium">₹{(data.data.open ?? 0).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Previous Close</p>
-                  <p className="font-medium">₹{data.data.previousClose.toFixed(2)}</p>
+                  <p className="font-medium">₹{(data.data.previousClose ?? 0).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Day High</p>
-                  <p className="font-medium">₹{data.data.high.toFixed(2)}</p>
+                  <p className="font-medium">₹{(data.data.high ?? 0).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Day Low</p>
-                  <p className="font-medium">₹{data.data.low.toFixed(2)}</p>
+                  <p className="font-medium">₹{(data.data.low ?? 0).toFixed(2)}</p>
                 </div>
               </div>
 

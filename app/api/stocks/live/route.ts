@@ -50,16 +50,16 @@ export async function GET(req: Request) {
     const candlestickData = chartData.quotes.map(item => ({
       x: new Date(item.date).getTime(),
       y: [
-        item.open,
-        item.high,
-        item.low,
-        item.close
+        item.open ?? null,
+        item.high ?? null,
+        item.low ?? null,
+        item.close ?? null
       ]
     }));
     
     const volume = chartData.quotes.map(item => ({
       x: new Date(item.date).getTime(),
-      y: item.volume || 0
+      y: item.volume ?? 0
     }));
     
     // Add the latest quote as the most recent candle
@@ -72,31 +72,31 @@ export async function GET(req: Request) {
       candlestickData.push({
         x: new Date().getTime(),
         y: [
-          quote.regularMarketOpen || quote.regularMarketPrice,
-          quote.regularMarketDayHigh || quote.regularMarketPrice,
-          quote.regularMarketDayLow || quote.regularMarketPrice,
-          quote.regularMarketPrice
+          quote.regularMarketOpen ?? quote.regularMarketPrice ?? null,
+          quote.regularMarketDayHigh ?? quote.regularMarketPrice ?? null,
+          quote.regularMarketDayLow ?? quote.regularMarketPrice ?? null,
+          quote.regularMarketPrice ?? null
         ]
       });
       
       volume.push({
         x: new Date().getTime(),
-        y: quote.regularMarketVolume || 0
+        y: quote.regularMarketVolume ?? 0
       });
     }
     
     // Prepare response data
     const responseData = {
       symbol: nseSymbol,
-      companyName: quote.shortName || quote.longName,
-      currentPrice: quote.regularMarketPrice,
-      change: quote.regularMarketChange,
-      changePercent: quote.regularMarketChangePercent,
-      open: quote.regularMarketOpen,
-      high: quote.regularMarketDayHigh,
-      low: quote.regularMarketDayLow,
-      volume: quote.regularMarketVolume,
-      previousClose: quote.regularMarketPreviousClose,
+      companyName: quote.shortName ?? quote.longName ?? nseSymbol,
+      currentPrice: quote.regularMarketPrice ?? 0,
+      change: quote.regularMarketChange ?? 0,
+      changePercent: quote.regularMarketChangePercent ?? 0,
+      open: quote.regularMarketOpen ?? 0,
+      high: quote.regularMarketDayHigh ?? 0,
+      low: quote.regularMarketDayLow ?? 0,
+      volume: quote.regularMarketVolume ?? 0,
+      previousClose: quote.regularMarketPreviousClose ?? 0,
       timestamp: new Date().toISOString(),
       candlestickData,
       volumeData: volume

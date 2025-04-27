@@ -15,7 +15,7 @@ import SignupForm from '../components/SignupForm'
 import PortfolioManager from '../components/PortfolioManager'
 import WatchlistManager from '../components/WatchlistManager'
 import UserProfile from '../components/UserProfile'
-import { supabase } from '../lib/supabaseClient'
+import { supabase, mockSupabase } from '../lib/supabaseClient'
 
 export default function MainPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -25,9 +25,15 @@ export default function MainPage() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setIsAuthenticated(true)
+      try {
+        // Use mock client in development if needed
+        const client = mockSupabase || supabase;
+        const { data: { user } } = await client.auth.getUser();
+        if (user) {
+          setIsAuthenticated(true);
+        }
+      } catch (error) {
+        console.error('Error checking user:', error);
       }
     }
     checkUser()

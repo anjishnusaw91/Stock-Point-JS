@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Menu, X, Search, User, LogOut, ChevronDown, BarChart, Activity, LineChart, PieChart, Briefcase, BookOpen } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, mockSupabase } from '../lib/supabaseClient';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { StockPointLogo } from './StockPointLogo';
@@ -66,9 +66,15 @@ export default function Navbar({ selectedTab, setSelectedTab, onLogout }: Navbar
     };
 
     const getUserEmail = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) {
-        setUserEmail(user.email);
+      try {
+        // Try to use real Supabase client first, fallback to mock if needed
+        const client = mockSupabase || supabase;
+        const { data: { user } } = await client.auth.getUser();
+        if (user?.email) {
+          setUserEmail(user.email);
+        }
+      } catch (error) {
+        console.error('Error getting user email:', error);
       }
     };
 
@@ -87,8 +93,15 @@ export default function Navbar({ selectedTab, setSelectedTab, onLogout }: Navbar
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    onLogout();
+    try {
+      // Try to use real Supabase client first, fallback to mock if needed
+      const client = mockSupabase || supabase;
+      await client.auth.signOut();
+      onLogout();
+    } catch (error) {
+      console.error('Error signing out:', error);
+      onLogout(); // Still call onLogout to maintain app state
+    }
   };
 
   const toggleDropdown = (id: string) => {
