@@ -24,7 +24,7 @@ export const TECHNICAL_INDICATORS: Indicator[] = [
   },
   {
     id: 'rsi',
-    name: 'RSI (Coming Soon)',
+    name: 'RSI',
     description: '14-period RSI',
     color: '#FF9800',
     type: 'separate',
