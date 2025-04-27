@@ -161,7 +161,8 @@ const WatchlistManager: React.FC = () => {
         uniqueSymbols.map(async (symbol) => {
           try {
             const nseSymbol = symbol.endsWith('.NS') ? symbol : `${symbol}.NS`;
-            const quote = await yahooFinance.quote(nseSymbol);
+            const quoteResult = await yahooFinance.quote(nseSymbol);
+            const quote = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
             return { 
               symbol, 
               price: quote.regularMarketPrice,

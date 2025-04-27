@@ -22,7 +22,8 @@ export async function POST(req: Request) {
           console.log(`Fetching data for ${nseSymbol}...`);
           
           // Fetch detailed quote data
-          const quote = await yahooFinance.quote(nseSymbol);
+          const quoteResult = await yahooFinance.quote(nseSymbol);
+          const quote = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
           
           // Add more data modules for comprehensive information
           const modules = await yahooFinance.quoteSummary(nseSymbol, { 

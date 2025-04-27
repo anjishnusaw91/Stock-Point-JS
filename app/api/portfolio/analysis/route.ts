@@ -54,7 +54,9 @@ export async function POST(req: Request) {
       stocks.map(async (stock) => {
         try {
           const nseSymbol = stock.symbol.endsWith('.NS') ? stock.symbol : `${stock.symbol}.NS`;
-          const quote = await yahooFinance.quote(nseSymbol);
+          const quoteResult = await yahooFinance.quote(nseSymbol);
+          // Handle the quote result which might be an array
+          const quote = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
           const moduleInfo = await yahooFinance.quoteSummary(nseSymbol, { modules: ['summaryProfile', 'defaultKeyStatistics', 'financialData'] });
           
           const currentPrice = quote.regularMarketPrice || 0;

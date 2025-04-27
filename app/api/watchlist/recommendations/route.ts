@@ -164,7 +164,8 @@ export async function POST(req: Request) {
           const nseSymbol = stock.symbol.endsWith('.NS') ? stock.symbol : `${stock.symbol}.NS`;
           
           // Get detailed quote data
-          const quote = await yahooFinance.quote(nseSymbol);
+          const quoteResult = await yahooFinance.quote(nseSymbol);
+          const quote = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
           
           // Get additional modules for more data
           const modules = await yahooFinance.quoteSummary(nseSymbol, { 
