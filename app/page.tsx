@@ -12,6 +12,8 @@ import LiveCharts from '../components/LiveCharts'
 import Contact from '../components/Contact'
 import LoginForm from '../components/LoginForm'
 import SignupForm from '../components/SignupForm'
+import PortfolioManager from '../components/PortfolioManager'
+import WatchlistManager from '../components/WatchlistManager'
 import { supabase } from '../lib/supabaseClient'
 
 export default function MainPage() {
@@ -59,6 +61,10 @@ export default function MainPage() {
         return <GeneralForecaster />
       case 'Live Charts':
         return <LiveCharts />
+      case 'Portfolio Manager':
+        return <PortfolioManager />
+      case 'Watchlist Manager':
+        return <WatchlistManager />
       case 'Contact':
         return <Contact />
       default:

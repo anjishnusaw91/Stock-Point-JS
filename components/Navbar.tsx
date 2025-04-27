@@ -15,6 +15,8 @@ const tabs = [
   { name: "Technical Analysis", id: "Technical Analysis" },
   { name: "Stat Predictor", id: "NIFTY predictor" },
   { name: "Forecaster", id: "General Forecaster" },
+  { name: "Portfolio", id: "Portfolio Manager" },
+  { name: "Watchlist", id: "Watchlist Manager" },
   { name: "Contact", id: "Contact" }
 ];
 
