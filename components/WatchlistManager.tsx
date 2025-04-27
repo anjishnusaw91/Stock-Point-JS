@@ -14,14 +14,14 @@ interface StockSymbol {
 
 interface WatchlistWithStocks extends Watchlist {
   stocks: (WatchlistStock & { 
-    currentPrice?: number;
-    previousClose?: number;
-    change?: number;
-    changePercent?: number;
-    volume?: number;
-    avgVolume?: number;
-    high?: number;
-    low?: number;
+    currentPrice: number;
+    previousClose: number;
+    change: number;
+    changePercent: number;
+    volume: number;
+    avgVolume: number;
+    high: number;
+    low: number;
   })[];
 }
 
