@@ -1,8 +1,33 @@
 import { NextResponse } from 'next/server';
 import yahooFinance from 'yahoo-finance2';
 
+// Define interfaces for data types
+interface StockData {
+  symbol: string;
+  currentPrice: number;
+  previousClose: number;
+  change: number;
+  changePercent: number;
+  high: number;
+  low: number;
+  volume: number;
+  avgVolume: number;
+  fiftyDayAvg?: number;
+  twoHundredDayAvg?: number;
+  error?: string;
+}
+
+interface WatchlistStock {
+  id: string;
+  symbol: string;
+  watchlist_id: string;
+  notes?: string;
+  date_added: string;
+  [key: string]: any; // Allow additional properties
+}
+
 // Cache to limit API calls
-const cache: Record<string, { data: any; timestamp: number }> = {};
+const cache: Record<string, { data: StockData; timestamp: number }> = {};
 const CACHE_TTL = 60000; // 1 minute in milliseconds
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +50,7 @@ export async function POST(req: Request) {
     const uniqueSymbols = Array.from(new Set(symbols));
     
     const now = Date.now();
-    const stocksData = [];
+    const stocksData: StockData[] = [];
 
     // Process each symbol
     for (const symbol of uniqueSymbols) {
@@ -50,7 +75,7 @@ export async function POST(req: Request) {
         const quote = await yahooFinance.quote(nseSymbol);
         
         // Format the quote data
-        const stockData = {
+        const stockData: StockData = {
           symbol: cleanSymbol,
           currentPrice: quote.regularMarketPrice ?? 0,
           previousClose: quote.regularMarketPreviousClose ?? 0,
@@ -90,7 +115,7 @@ export async function POST(req: Request) {
     }
     
     // Map the data back to the original watchlist stocks
-    const watchlistStocksWithData = watchlistStocks.map(stock => {
+    const watchlistStocksWithData = watchlistStocks.map((stock: WatchlistStock) => {
       const stockData = stocksData.find(data => data.symbol === stock.symbol.replace('.NS', ''));
       
       if (!stockData) {
