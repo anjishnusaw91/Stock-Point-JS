@@ -254,33 +254,20 @@ const UserProfile: React.FC = () => {
       
       console.log('Filtered update data:', filteredData);
       
-      try {
-        // Try API approach first to bypass RLS
-        const response = await fetch('/api/profiles/update', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(filteredData),
-        });
-        
-        const result = await response.json();
-        console.log('Profile update API result:', result);
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to update profile via API');
-        }
-      } catch (apiError) {
-        console.error('API profile update failed, trying direct approach:', apiError);
-        
-        // Fallback to direct approach
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .upsert(filteredData, { onConflict: 'id' });
-
-        console.log('Update result:', { updateError });
-          
-        if (updateError) throw updateError;
+      // Always use the API approach which uses admin privileges to bypass RLS
+      const response = await fetch('/api/profiles/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(filteredData),
+      });
+      
+      const result = await response.json();
+      console.log('Profile update API result:', result);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update profile via API');
       }
 
       // Refresh user profile data
@@ -289,7 +276,13 @@ const UserProfile: React.FC = () => {
       setIsEditing(false);
     } catch (err) {
       console.error('Error updating profile:', err);
-      setError(`Failed to update profile: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      if (err instanceof Error) {
+        setError(`Failed to update profile: ${err.message}`);
+      } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        setError(`Failed to update profile: ${(err as any).message}`);
+      } else {
+        setError(`Failed to update profile: ${JSON.stringify(err)}`);
+      }
     } finally {
       setIsSaving(false);
     }
