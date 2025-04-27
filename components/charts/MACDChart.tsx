@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import ApexCharts from 'apexcharts';
 import { TechnicalData } from '@/types/technical';
@@ -17,6 +17,78 @@ interface MACDChartProps {
 }
 
 export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
+  // Add state to track chart rendering safety
+  const [chartReady, setChartReady] = useState(false);
+  
+  // Validate data and ensure all required fields exist
+  const validData = React.useMemo(() => {
+    if (!data?.prices?.length || !data?.indicators?.macd) {
+      return null;
+    }
+
+    // Ensure dates and MACD values are properly formatted
+    const dates = data.prices.map(price => price.date).filter(Boolean);
+    const { line, signal, histogram } = data.indicators.macd;
+
+    if (!dates.length || !line?.length || !signal?.length || !histogram?.length) {
+      return null;
+    }
+
+    // Ensure all arrays have the same length
+    const minLength = Math.min(dates.length, line.length, signal.length, histogram.length);
+    if (minLength === 0) {
+      return null;
+    }
+
+    const validPoints = [];
+    for (let i = 0; i < minLength; i++) {
+      const date = dates[i];
+      const macd = Number(line[i]);
+      const sig = Number(signal[i]);
+      const hist = Number(histogram[i]);
+
+      if (!date || isNaN(macd) || isNaN(sig) || isNaN(hist)) {
+        continue;
+      }
+
+      validPoints.push({
+        x: new Date(date).getTime(),
+        macd,
+        signal: sig,
+        histogram: hist
+      });
+    }
+
+    if (!validPoints.length) {
+      return null;
+    }
+
+    return validPoints;
+  }, [data]);
+
+  // Use effect to safely set chart ready state
+  useEffect(() => {
+    if (validData) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        setChartReady(true);
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      setChartReady(false);
+    }
+  }, [validData]);
+
+  if (!validData) {
+    return (
+      <ChartContainer title="MACD (12-26-9)">
+        <div className="flex items-center justify-center h-[250px] text-gray-500">
+          No MACD data available
+        </div>
+      </ChartContainer>
+    );
+  }
+
   const getChartOptions = (): ApexOptions => ({
     chart: {
       type: 'line',
@@ -25,7 +97,8 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
       animations: { enabled: false },
       zoom: {
         enabled: false
-      }
+      },
+      fontFamily: 'inherit',
     },
     stroke: {
       width: [2, 2, 0],
@@ -69,13 +142,22 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
       },
       y: [
         {
-          formatter: (value: number) => `MACD: ${value.toFixed(2)}`,
+          formatter: (value) => {
+            const num = Number(value);
+            return isNaN(num) ? 'N/A' : `MACD: ${num.toFixed(2)}`;
+          },
         },
         {
-          formatter: (value: number) => `Signal: ${value.toFixed(2)}`,
+          formatter: (value) => {
+            const num = Number(value);
+            return isNaN(num) ? 'N/A' : `Signal: ${num.toFixed(2)}`;
+          },
         },
         {
-          formatter: (value: number) => `Histogram: ${value.toFixed(2)}`,
+          formatter: (value) => {
+            const num = Number(value);
+            return isNaN(num) ? 'N/A' : `Histogram: ${num.toFixed(2)}`;
+          },
         },
       ],
     },
@@ -113,29 +195,17 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
   });
 
   const getSeries = () => {
-    if (!data.indicators?.macd) return [];
-
-    const dates = data.prices.map(price => new Date(price.date).getTime());
-    const { line, signal, histogram } = data.indicators.macd;
-
-    const validData = dates.map((date, index) => ({
-      x: date,
-      macd: line[index],
-      signal: signal[index],
-      histogram: histogram[index],
-    })).filter(point => 
-      point.macd !== null && 
-      point.signal !== null && 
-      point.histogram !== null
-    );
-
+    if (!validData || validData.length === 0) {
+      return [];
+    }
+    
     return [
       {
         name: 'MACD',
         type: 'line',
         data: validData.map(point => ({
           x: point.x,
-          y: Number(point.macd!.toFixed(2)),
+          y: point.macd,
         })),
       },
       {
@@ -143,15 +213,15 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
         type: 'line',
         data: validData.map(point => ({
           x: point.x,
-          y: Number(point.signal!.toFixed(2)),
+          y: point.signal,
         })),
       },
       {
         name: 'Histogram',
-        type: 'line',
+        type: 'bar',
         data: validData.map(point => ({
           x: point.x,
-          y: Number(point.histogram!.toFixed(2)),
+          y: point.histogram,
         })),
       },
     ];
@@ -159,12 +229,21 @@ export const MACDChart: React.FC<MACDChartProps> = ({ data }) => {
 
   return (
     <ChartContainer title="MACD (12-26-9)">
-      <Chart 
-        options={getChartOptions()} 
-        series={getSeries()} 
-        type="line" 
-        height={250}
-      />
+      {chartReady ? (
+        <div className="w-full h-full">
+          <Chart 
+            options={getChartOptions()} 
+            series={getSeries()} 
+            type="line" 
+            height="100%"
+            width="100%"
+          />
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-[250px] text-gray-500">
+          Preparing MACD chart...
+        </div>
+      )}
     </ChartContainer>
   );
 }; 

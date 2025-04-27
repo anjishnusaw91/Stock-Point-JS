@@ -1,10 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import ApexCharts from 'apexcharts';
 import { TechnicalData } from '@/types/technical';
 import { TECHNICAL_INDICATORS } from '@/constants/indicators';
+import { ChartContainer } from './ChartContainer';
 
 type ApexOptions = ApexCharts.ApexOptions;
 const Chart = dynamic(() => import('react-apexcharts'), { 
@@ -18,23 +19,86 @@ interface PriceChartProps {
 }
 
 export const PriceChart: React.FC<PriceChartProps> = ({ data, selectedIndicators }) => {
+  // Add state to track chart rendering safety
+  const [chartReady, setChartReady] = useState(false);
+  
+  // Validate data and ensure all required fields exist
+  const validData = React.useMemo(() => {
+    if (!data?.prices?.length) {
+      return null;
+    }
+
+    // Ensure dates and price values are properly formatted
+    try {
+      const validPoints = data.prices
+        .filter(price => price && price.date && price.close !== undefined && price.close !== null)
+        .map(price => {
+          const close = Number(price.close);
+          if (isNaN(close)) {
+            return null;
+          }
+          try {
+            const timestamp = new Date(price.date).getTime();
+            if (isNaN(timestamp)) {
+              return null;
+            }
+            return {
+              x: timestamp,
+              y: close
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter((point): point is NonNullable<typeof point> => point !== null);
+
+      if (!validPoints.length) {
+        return null;
+      }
+
+      return {
+        priceData: validPoints,
+        indicators: data.indicators || {}
+      };
+    } catch (error) {
+      console.error("Error processing chart data:", error);
+      return null;
+    }
+  }, [data]);
+
+  // Use effect to safely set chart ready state
+  useEffect(() => {
+    if (validData) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        setChartReady(true);
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      setChartReady(false);
+    }
+  }, [validData]);
+
+  if (!validData) {
+    return (
+      <ChartContainer title="Price">
+        <div className="flex items-center justify-center h-[250px] text-gray-500">
+          No price data available
+        </div>
+      </ChartContainer>
+    );
+  }
+
   const getChartOptions = (): ApexOptions => ({
     chart: {
       type: 'line',
-      height: 500,
+      height: 250,
+      toolbar: { show: false },
       animations: { enabled: false },
-      toolbar: {
-        show: true,
-        tools: {
-          download: true,
-          selection: true,
-          zoom: true,
-          zoomin: true,
-          zoomout: true,
-          pan: true,
-          reset: true,
-        },
+      zoom: {
+        enabled: false
       },
+      fontFamily: 'inherit',
     },
     stroke: {
       curve: 'smooth',
@@ -43,33 +107,52 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, selectedIndicators
     },
     grid: {
       borderColor: '#f1f1f1',
-      row: {
-        colors: ['transparent', 'transparent'],
-        opacity: 0.5,
-      },
+      padding: { left: 10, right: 10 },
     },
     xaxis: {
       type: 'datetime',
       labels: {
+        rotate: -45,
+        rotateAlways: false,
+        hideOverlappingLabels: true,
         datetimeUTC: false,
-        format: 'dd MMM yyyy',
+        format: 'dd MMM',
+        style: {
+          fontSize: '10px',
+        }
+      },
+      axisBorder: {
+        show: true,
+      },
+      axisTicks: {
+        show: true,
       },
     },
     yaxis: {
       labels: {
-        formatter: (value) => `₹${value.toFixed(2)}`,
-      },
-      tickAmount: 8,
-      forceNiceScale: true,
+        formatter: (value) => {
+          const num = Number(value);
+          if (isNaN(num)) return 'N/A';
+          return `₹${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        },
+        style: {
+          fontSize: '10px',
+        }
+      }
     },
     tooltip: {
       shared: true,
+      intersect: false,
       x: {
-        format: 'dd MMM yyyy',
+        format: 'dd MMM yyyy'
       },
       y: {
-        formatter: (value) => `₹${value.toFixed(2)}`,
-      },
+        formatter: (value) => {
+          const num = Number(value);
+          if (isNaN(num)) return 'N/A';
+          return `₹${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+      }
     },
     legend: {
       position: 'top',
@@ -79,106 +162,138 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, selectedIndicators
   });
 
   const getSeries = () => {
-    const series = [
-      {
+    try {
+      if (!validData?.priceData?.length) {
+        return [];
+      }
+      
+      const series = [
+        {
+          name: 'Price',
+          type: 'line',
+          data: validData.priceData,
+        },
+      ];
+
+      // Safely add Bollinger Bands
+      if (selectedIndicators.includes('bb') && validData.indicators.bollinger) {
+        const { upper, middle, lower } = validData.indicators.bollinger;
+        if (upper && upper.length && middle && middle.length && lower && lower.length) {
+          // Ensure arrays are not empty
+          const minLength = Math.min(
+            validData.priceData.length,
+            upper.length,
+            middle.length,
+            lower.length
+          );
+          
+          if (minLength > 0) {
+            const validPoints = [];
+            
+            for (let i = 0; i < minLength; i++) {
+              const point = validData.priceData[i];
+              const upperVal = Number(upper[i]);
+              const middleVal = Number(middle[i]);
+              const lowerVal = Number(lower[i]);
+              
+              if (isNaN(upperVal) || isNaN(middleVal) || isNaN(lowerVal)) {
+                continue;
+              }
+              
+              validPoints.push({
+                x: point.x,
+                upper: upperVal,
+                middle: middleVal,
+                lower: lowerVal
+              });
+            }
+
+            if (validPoints.length > 0) {
+              series.push(
+                {
+                  name: 'BB Upper',
+                  type: 'line',
+                  data: validPoints.map(point => ({ x: point.x, y: point.upper })),
+                },
+                {
+                  name: 'BB Middle',
+                  type: 'line',
+                  data: validPoints.map(point => ({ x: point.x, y: point.middle })),
+                },
+                {
+                  name: 'BB Lower',
+                  type: 'line',
+                  data: validPoints.map(point => ({ x: point.x, y: point.lower })),
+                }
+              );
+            }
+          }
+        }
+      }
+
+      // Add EMAs if selected and available
+      if (selectedIndicators.includes('ema') && validData.indicators.ema) {
+        const { ema20, ema50, ema200 } = validData.indicators.ema;
+        
+        const addEMA = (data: (number | null)[], name: string) => {
+          if (!data || !data.length) return;
+          
+          const validPoints = [];
+          const minLength = Math.min(validData.priceData.length, data.length);
+          
+          for (let i = 0; i < minLength; i++) {
+            const point = validData.priceData[i];
+            const value = Number(data[i]);
+            if (isNaN(value)) continue;
+            
+            validPoints.push({ 
+              x: point.x, 
+              y: value 
+            });
+          }
+
+          if (validPoints.length > 0) {
+            series.push({
+              name,
+              type: 'line',
+              data: validPoints,
+            });
+          }
+        };
+
+        if (ema20) addEMA(ema20, 'EMA 20');
+        if (ema50) addEMA(ema50, 'EMA 50');
+        if (ema200) addEMA(ema200, 'EMA 200');
+      }
+
+      return series;
+    } catch (error) {
+      console.error("Error generating chart series:", error);
+      return [{
         name: 'Price',
         type: 'line',
-        data: data.prices.map((price) => ({
-          x: new Date(price.date).getTime(),
-          y: price.close,
-        })),
-      },
-    ];
-
-    // Safely add Bollinger Bands
-    if (selectedIndicators.includes('bb') && data.indicators?.bollinger) {
-      const { upper, middle, lower } = data.indicators.bollinger;
-      if (upper && middle && lower) {
-        series.push(
-          {
-            name: 'BB Upper',
-            type: 'line',
-            data: upper.map((value, index) => ({
-              x: new Date(data.prices[index].date).getTime(),
-              y: value,
-            })),
-          },
-          {
-            name: 'BB Middle',
-            type: 'line',
-            data: middle.map((value, index) => ({
-              x: new Date(data.prices[index].date).getTime(),
-              y: value,
-            })),
-          },
-          {
-            name: 'BB Lower',
-            type: 'line',
-            data: lower.map((value, index) => ({
-              x: new Date(data.prices[index].date).getTime(),
-              y: value,
-            })),
-          }
-        );
-      }
+        data: [],
+      }];
     }
-
-    // Add EMAs if selected and available
-    if (selectedIndicators.includes('ema') && data.indicators?.ema) {
-      const { ema20, ema50, ema200 } = data.indicators.ema;
-      const dates = data.prices.map(price => new Date(price.date).getTime());
-
-      if (ema20?.length === data.prices.length) {
-        series.push({
-          name: 'EMA 20',
-          type: 'line',
-          data: ema20.map((value, index) => 
-            value === null ? null : {
-              x: dates[index],
-              y: value
-            }
-          ).filter((point): point is { x: number; y: number } => point !== null),
-        });
-      }
-
-      if (ema50?.length === data.prices.length) {
-        series.push({
-          name: 'EMA 50',
-          type: 'line',
-          data: ema50.map((value, index) => 
-            value === null ? null : {
-              x: dates[index],
-              y: value
-            }
-          ).filter((point): point is { x: number; y: number } => point !== null),
-        });
-      }
-
-      if (ema200?.length === data.prices.length) {
-        series.push({
-          name: 'EMA 200',
-          type: 'line',
-          data: ema200.map((value, index) => 
-            value === null ? null : {
-              x: dates[index],
-              y: value
-            }
-          ).filter((point): point is { x: number; y: number } => point !== null),
-        });
-      }
-    }
-
-    return series;
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow">
-      <Chart
-        options={getChartOptions()}
-        series={getSeries()}
-        type="line"
-        height={500}
-      />
-    </div>
+    <ChartContainer title="Price">
+      {chartReady ? (
+        <div className="w-full h-full">
+          <Chart 
+            options={getChartOptions()} 
+            series={getSeries()} 
+            type="line" 
+            height="100%"
+            width="100%"
+          />
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-[250px] text-gray-500">
+          Preparing price chart...
+        </div>
+      )}
+    </ChartContainer>
   );
 }; 

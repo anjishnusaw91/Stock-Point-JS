@@ -20,13 +20,31 @@ export async function POST(req: Request) {
       symbols.map(async (symbol) => {
         const nseSymbol = symbol.endsWith('.NS') ? symbol : `${symbol}.NS`;
         try {
-          const data = await yahooFinance.historical(nseSymbol, queryOptions);
+          // Use chart() instead of historical()
+          const result = await yahooFinance.chart(nseSymbol, queryOptions);
+          if (!result || !result.quotes || result.quotes.length === 0) {
+            console.error(`No data received for ${symbol}`);
+            return null;
+          }
+          
+          // Map and validate chart data
+          const data = result.quotes.map(item => {
+            // Ensure all required fields exist and are valid numbers
+            if (item.date && item.close !== undefined && item.close !== null) {
+              const closePrice = Number(item.close);
+              if (!isNaN(closePrice)) {
+                return {
+                  date: new Date(item.date).toISOString().split('T')[0],
+                  close: closePrice,
+                };
+              }
+            }
+            return null;
+          }).filter(item => item !== null); // Remove any null/invalid entries
+          
           return {
             symbol: symbol.replace('.NS', ''),
-            data: data.map(item => ({
-              date: item.date.toISOString().split('T')[0],
-              close: Number(item.close.toFixed(2)),
-            })),
+            data,
           };
         } catch (error) {
           console.error(`Error fetching data for ${symbol}:`, error);

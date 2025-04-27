@@ -3,8 +3,12 @@ import dynamic from 'next/dynamic';
 import ApexCharts from 'apexcharts';
 
 type ApexOptions = ApexCharts.ApexOptions;
+// Dynamically import the chart component with no SSR
 const Chart = dynamic(() => import('react-apexcharts'), { 
-  ssr: false 
+  ssr: false,
+  loading: () => <div className="flex justify-center items-center h-[500px]">
+    <div className="text-xl">Loading chart component...</div>
+  </div>
 }) as React.ComponentType<any>;
 
 interface StockData {
@@ -29,6 +33,7 @@ const PerformanceComparator: React.FC = () => {
   const [symbols, setSymbols] = useState<StockSymbol[]>([]);
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>([]);
   const [currentSelection, setCurrentSelection] = useState<string>('');
+  const [chartKey, setChartKey] = useState<number>(0); // Used to force re-render the chart
   const [dateRange, setDateRange] = useState({
     startDate: '2024-01-01',
     endDate: new Date().toISOString().split('T')[0],
@@ -54,7 +59,10 @@ const PerformanceComparator: React.FC = () => {
   // Fetch comparison data when selections change
   useEffect(() => {
     const fetchComparisonData = async () => {
-      if (selectedSymbols.length === 0) return;
+      if (selectedSymbols.length === 0) {
+        setStockData([]);
+        return;
+      }
 
       setLoading(true);
       setError(null);
@@ -82,9 +90,19 @@ const PerformanceComparator: React.FC = () => {
           throw new Error(data.error || 'Failed to fetch data');
         }
 
-        setStockData(data.data);
+        // Validate the data before setting it
+        const validatedData = data.data.filter((stock: StockResult) => 
+          stock && 
+          stock.symbol && 
+          Array.isArray(stock.data) && 
+          stock.data.length > 0
+        );
+        
+        setStockData(validatedData);
+        setChartKey(prev => prev + 1); // Force chart re-render with new data
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
+        setStockData([]);
       } finally {
         setLoading(false);
       }
@@ -93,21 +111,85 @@ const PerformanceComparator: React.FC = () => {
     fetchComparisonData();
   }, [selectedSymbols, dateRange]);
 
-  const chartOptions: ApexOptions = {
+  // Process and validate chart data
+  const chartSeries = React.useMemo(() => {
+    if (!stockData || !stockData.length) return [];
+    
+    return stockData.map((stock) => {
+      // Ensure data exists and is valid
+      if (!stock?.data || !Array.isArray(stock.data) || stock.data.length === 0) {
+        return {
+          name: stock?.symbol || 'Unknown',
+          data: [],
+        };
+      }
+
+      // Process and validate each data point
+      const validData = stock.data
+        .filter(item => 
+          item && 
+          typeof item === 'object' && 
+          item.date && 
+          typeof item.date === 'string' &&
+          item.close !== undefined && 
+          item.close !== null
+        )
+        .map((item) => {
+          try {
+            const timestamp = new Date(item.date).getTime();
+            if (isNaN(timestamp)) {
+              return null;
+            }
+            
+            const closeValue = Number(item.close);
+            if (isNaN(closeValue)) {
+              return null;
+            }
+            
+            return {
+              x: timestamp,
+              y: closeValue,
+            };
+          } catch (e) {
+            console.error(`Error processing data point for ${stock.symbol}:`, e);
+            return null;
+          }
+        })
+        .filter((point): point is { x: number; y: number } => 
+          point !== null && 
+          typeof point === 'object' && 
+          typeof point.x === 'number' && 
+          !isNaN(point.x) &&
+          typeof point.y === 'number' && 
+          !isNaN(point.y)
+        );
+
+      return {
+        name: stock.symbol,
+        data: validData,
+      };
+    }).filter(series => series.data.length > 0); // Only include series with valid data
+  }, [stockData]);
+
+  const chartOptions: ApexOptions = React.useMemo(() => ({
     chart: {
       type: 'line',
       height: 500,
+      fontFamily: 'inherit',
       animations: {
-        enabled: true,
+        enabled: false, // Disable animations to prevent initial rendering issues
       },
       background: '#fff',
       zoom: {
         enabled: true,
         type: 'x',
       },
+      toolbar: {
+        show: true,
+      },
     },
     title: {
-      text: 'Stock Performance Comparison',
+      text: chartSeries.length > 0 ? 'Stock Performance Comparison' : '',
       align: 'center',
     },
     xaxis: {
@@ -122,16 +204,27 @@ const PerformanceComparator: React.FC = () => {
         text: 'Closing Price (₹)',
       },
       labels: {
-        formatter: (value) => `₹${value.toFixed(2)}`,
+        formatter: (value) => {
+          if (typeof value !== 'number' || isNaN(value)) {
+            return 'N/A';
+          }
+          return `₹${value.toFixed(2)}`;
+        },
       },
     },
     tooltip: {
       shared: true,
+      intersect: false,
       x: {
         format: 'dd MMM yyyy',
       },
       y: {
-        formatter: (value) => `₹${value.toFixed(2)}`,
+        formatter: (value) => {
+          if (typeof value !== 'number' || isNaN(value)) {
+            return 'N/A';
+          }
+          return `₹${value.toFixed(2)}`;
+        },
       },
     },
     legend: {
@@ -145,15 +238,19 @@ const PerformanceComparator: React.FC = () => {
     grid: {
       show: true,
     },
-  };
-
-  const chartSeries = stockData.map((stock) => ({
-    name: stock.symbol,
-    data: stock.data.map((item) => ({
-      x: new Date(item.date).getTime(),
-      y: item.close,
-    })),
-  }));
+    noData: {
+      text: 'No data available',
+      align: 'center',
+      verticalAlign: 'middle',
+      offsetX: 0,
+      offsetY: 0,
+      style: {
+        color: '#999',
+        fontSize: '14px',
+        fontFamily: 'inherit',
+      }
+    }
+  }), [chartSeries]);
 
   const handleAddStock = () => {
     if (currentSelection && !selectedSymbols.includes(currentSelection)) {
@@ -164,6 +261,30 @@ const PerformanceComparator: React.FC = () => {
 
   const handleRemoveStock = (symbolToRemove: string) => {
     setSelectedSymbols(prev => prev.filter(symbol => symbol !== symbolToRemove));
+  };
+
+  const renderChart = () => {
+    // Only render chart when we have valid data
+    if (!chartSeries || chartSeries.length === 0) {
+      return (
+        <div className="flex justify-center items-center h-[500px]">
+          <div className="text-xl text-gray-500">
+            No data available to display
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <Chart
+        key={chartKey} // Force re-render when data changes
+        options={chartOptions}
+        series={chartSeries}
+        type="line"
+        height={500}
+        width="100%"
+      />
+    );
   };
 
   return (
@@ -284,22 +405,17 @@ const PerformanceComparator: React.FC = () => {
           </div>
         )}
 
-        {!loading && !error && selectedSymbols.length > 0 && stockData.length > 0 && (
-          <div className="w-full h-[600px]">
-            <Chart
-              options={chartOptions}
-              series={chartSeries}
-              type="line"
-              height={500}
-            />
-          </div>
-        )}
-
-        {!loading && !error && selectedSymbols.length === 0 && (
-          <div className="flex justify-center items-center h-96">
-            <div className="text-xl text-gray-500">
-              Please select stocks to compare their performance
-            </div>
+        {!loading && !error && (
+          <div className="w-full">
+            {selectedSymbols.length === 0 ? (
+              <div className="flex justify-center items-center h-96">
+                <div className="text-xl text-gray-500">
+                  Please select stocks to compare their performance
+                </div>
+              </div>
+            ) : (
+              renderChart()
+            )}
           </div>
         )}
 

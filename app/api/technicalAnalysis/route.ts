@@ -32,6 +32,7 @@ interface TechnicalData {
       signal: (number | null)[];
       histogram: (number | null)[];
     };
+    rsi?: number[];
   };
 }
 
@@ -168,6 +169,9 @@ export async function POST(req: Request) {
       throw new Error('Stock symbol is required');
     }
 
+    // Suppress Yahoo Finance deprecation notice
+    yahooFinance.suppressNotices(['ripHistorical']);
+
     const nseSymbol = symbol.endsWith('.NS') ? symbol : `${symbol}.NS`;
     const queryOptions = {
       period1: new Date(startDate || '2024-01-01'),
@@ -175,26 +179,30 @@ export async function POST(req: Request) {
       interval: '1d' as const,
     };
 
-    const result = await yahooFinance.historical(nseSymbol, queryOptions);
+    // Use chart() instead of historical()
+    const result = await yahooFinance.chart(nseSymbol, queryOptions);
     
-    if (!result || result.length === 0) {
+    if (!result || !result.quotes || result.quotes.length === 0) {
       throw new Error('No data received from Yahoo Finance');
     }
 
-    if (result.length < 26) {
+    if (result.quotes.length < 26) {
       throw new Error('Insufficient data for technical analysis. Please select a longer date range.');
     }
 
-    const prices = result.map(item => item.close);
+    // Map chart data to our expected format
+    const priceData = result.quotes.map(item => ({
+      date: new Date(item.date).toISOString().split('T')[0],
+      open: Number(item.open),
+      high: Number(item.high),
+      low: Number(item.low),
+      close: Number(item.close),
+      volume: Number(item.volume),
+    }));
+
+    const prices = priceData.map(item => item.close);
     const technicalData: TechnicalData = {
-      prices: result.map(item => ({
-        date: item.date.toISOString().split('T')[0],
-        open: item.open,
-        high: item.high,
-        low: item.low,
-        close: item.close,
-        volume: item.volume,
-      })),
+      prices: priceData,
       indicators: {},
     };
 
@@ -215,10 +223,9 @@ export async function POST(req: Request) {
       technicalData.indicators.bollinger = calculateBollingerBands(prices);
     }
 
-    // RSI calculation temporarily disabled
-    // if (indicators.includes('rsi')) {
-    //   technicalData.indicators.rsi = calculateRSI(prices);
-    // }
+    if (indicators.includes('rsi')) {
+      technicalData.indicators.rsi = calculateRSI(prices);
+    }
 
     if (indicators.includes('macd')) {
       technicalData.indicators.macd = calculateMACD(prices);

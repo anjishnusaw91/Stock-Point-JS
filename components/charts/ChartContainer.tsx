@@ -12,7 +12,7 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ title, children 
         <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
       </div>
       <div className="p-4 overflow-x-auto">
-        <div className="min-w-[320px] md:min-w-full">
+        <div className="min-w-[320px] w-full h-[250px] md:min-w-full">
           {children}
         </div>
       </div>

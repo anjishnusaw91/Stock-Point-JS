@@ -4,7 +4,8 @@ import ApexCharts from 'apexcharts';
 
 type ApexOptions = ApexCharts.ApexOptions;
 const Chart = dynamic(() => import('react-apexcharts'), { 
-  ssr: false 
+  ssr: false,
+  loading: () => <div>Loading Chart...</div>
 }) as React.ComponentType<any>;
 
 interface StockSymbol {
@@ -36,6 +37,7 @@ const GeneralForecaster: React.FC = () => {
   const [forecastData, setForecastData] = useState<ForecastData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chartReady, setChartReady] = useState(false);
 
   useEffect(() => {
     const fetchSymbols = async () => {
@@ -59,6 +61,7 @@ const GeneralForecaster: React.FC = () => {
 
       setLoading(true);
       setError(null);
+      setChartReady(false);
 
       try {
         const response = await fetch('/api/generalForecaster', {
@@ -84,6 +87,7 @@ const GeneralForecaster: React.FC = () => {
         setForecastData(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
+        setForecastData(null);
       } finally {
         setLoading(false);
       }
@@ -92,7 +96,20 @@ const GeneralForecaster: React.FC = () => {
     fetchForecast();
   }, [selectedSymbol, predictionDays]);
 
-  const chartOptions: ApexOptions = {
+  // Set chart ready after data is loaded
+  useEffect(() => {
+    if (forecastData && forecastData.historical?.dates?.length > 0) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        setChartReady(true);
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      setChartReady(false);
+    }
+  }, [forecastData]);
+
+  const getChartOptions = (): ApexOptions => ({
     chart: {
       type: 'line',
       height: 500,
@@ -102,6 +119,7 @@ const GeneralForecaster: React.FC = () => {
       zoom: {
         enabled: true,
       },
+      fontFamily: 'inherit',
     },
     stroke: {
       curve: 'smooth',
@@ -120,13 +138,24 @@ const GeneralForecaster: React.FC = () => {
         text: 'Price (₹)',
       },
       labels: {
-        formatter: (value) => `₹${value.toFixed(2)}`,
+        formatter: (value) => {
+          const num = Number(value);
+          if (isNaN(num)) return 'N/A';
+          return `₹${num.toFixed(2)}`;
+        },
       },
     },
     tooltip: {
       shared: true,
       x: {
         format: 'dd MMM yyyy',
+      },
+      y: {
+        formatter: (value) => {
+          const num = Number(value);
+          if (isNaN(num)) return 'N/A';
+          return `₹${num.toFixed(2)}`;
+        },
       },
     },
     legend: {
@@ -145,39 +174,99 @@ const GeneralForecaster: React.FC = () => {
         },
       }],
     } : undefined,
-  };
+  });
 
   const getChartSeries = () => {
     if (!forecastData) return [];
 
-    return [
-      {
-        name: 'Actual Price',
-        type: 'line',
-        data: forecastData.historical.dates.map((date, index) => ({
-          x: new Date(date).getTime(),
-          y: Number(forecastData.historical.prices[index].toFixed(2)),
-        })),
-      },
-      {
-        name: 'Training Prediction',
-        type: 'line',
-        data: forecastData.historical.dates.map((date, index) => ({
-          x: new Date(date).getTime(),
-          y: forecastData.historical.predictions[index] 
-            ? Number(forecastData.historical.predictions[index]?.toFixed(2))
-            : null,
-        })).filter(point => point.y !== null),
-      },
-      {
-        name: 'Future Forecast',
-        type: 'line',
-        data: forecastData.forecast.dates.map((date, index) => ({
-          x: new Date(date).getTime(),
-          y: Number(forecastData.forecast.prices[index].toFixed(2)),
-        })),
-      },
-    ];
+    try {
+      // Process and validate historical data points
+      const historicalPoints = forecastData.historical.dates
+        .map((date, index) => {
+          if (!date) return null;
+          
+          try {
+            const timestamp = new Date(date).getTime();
+            if (isNaN(timestamp)) return null;
+            
+            const price = Number(forecastData.historical.prices[index]);
+            if (isNaN(price)) return null;
+            
+            return {
+              x: timestamp,
+              y: Number(price.toFixed(2)),
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter((point): point is NonNullable<typeof point> => point !== null);
+
+      // Process and validate prediction data points in historical period
+      const trainingPoints = forecastData.historical.dates
+        .map((date, index) => {
+          if (!date || !forecastData.historical.predictions[index]) return null;
+          
+          try {
+            const timestamp = new Date(date).getTime();
+            if (isNaN(timestamp)) return null;
+            
+            const prediction = Number(forecastData.historical.predictions[index]);
+            if (isNaN(prediction)) return null;
+            
+            return {
+              x: timestamp,
+              y: Number(prediction.toFixed(2)),
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter((point): point is NonNullable<typeof point> => point !== null);
+
+      // Process and validate forecast data points
+      const forecastPoints = forecastData.forecast.dates
+        .map((date, index) => {
+          if (!date) return null;
+          
+          try {
+            const timestamp = new Date(date).getTime();
+            if (isNaN(timestamp)) return null;
+            
+            const price = Number(forecastData.forecast.prices[index]);
+            if (isNaN(price)) return null;
+            
+            return {
+              x: timestamp,
+              y: Number(price.toFixed(2)),
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter((point): point is NonNullable<typeof point> => point !== null);
+
+      return [
+        {
+          name: 'Actual Price',
+          type: 'line',
+          data: historicalPoints,
+        },
+        {
+          name: 'Training Prediction',
+          type: 'line',
+          data: trainingPoints,
+        },
+        {
+          name: 'Future Forecast',
+          type: 'line',
+          data: forecastPoints,
+        },
+      ];
+    } catch (error) {
+      console.error("Error generating chart series:", error);
+      return [];
+    }
   };
 
   return (
@@ -203,7 +292,7 @@ const GeneralForecaster: React.FC = () => {
               ))}
             </select>
           </div>
-    <div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Prediction Days (1-30)
             </label>
@@ -250,61 +339,81 @@ const GeneralForecaster: React.FC = () => {
                   <p className="text-sm text-gray-500">Based on historical predictions</p>
                 </div>
               </div>
+              
               <div className="bg-white p-4 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-700">Confidence Level</h3>
                 <div className="mt-2">
                   <span className="text-2xl font-bold text-green-600">
                     {forecastData.metrics.confidence}%
                   </span>
-                  <p className="text-sm text-gray-500">For future predictions</p>
+                  <p className="text-sm text-gray-500">Based on statistical analysis</p>
                 </div>
               </div>
+              
               <div className="bg-white p-4 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-700">RMSE</h3>
                 <div className="mt-2">
-                  <span className="text-2xl font-bold text-orange-600">
-                    ₹{forecastData.metrics.rmse}
+                  <span className="text-2xl font-bold text-amber-600">
+                    {forecastData.metrics.rmse.toFixed(2)}
                   </span>
                   <p className="text-sm text-gray-500">Root Mean Square Error</p>
                 </div>
               </div>
             </div>
-
-            <div className="w-full h-[600px]">
-              <Chart
-                options={chartOptions}
-                series={getChartSeries()}
-                type="line"
-                height={500}
-              />
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <h3 className="font-bold text-lg mb-2">4-Day Price Forecast</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {forecastData.forecast.dates.map((date, index) => (
-                    <div key={date} className="p-3 bg-white rounded-lg shadow">
-                      <div className="text-sm text-gray-600">{new Date(date).toLocaleDateString()}</div>
-                      <div className="text-lg font-bold">₹{forecastData.forecast.prices[index].toFixed(2)}</div>
-                    </div>
-                  ))}
+            
+            <div className="bg-white p-4 rounded-lg shadow h-[500px]">
+              {chartReady ? (
+                <div className="w-full h-full">
+                  <Chart 
+                    options={getChartOptions()} 
+                    series={getChartSeries()} 
+                    type="line" 
+                    height="100%"
+                    width="100%"
+                  />
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-gray-500">Preparing forecast chart...</div>
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-6 p-4 bg-gray-50 rounded-md">
+              <h3 className="text-lg font-semibold mb-2">Forecast Insights</h3>
+              <p className="text-gray-700">
+                {selectedSymbol} is predicted to 
+                {forecastData.forecast.prices[forecastData.forecast.prices.length - 1] > 
+                 forecastData.historical.prices[forecastData.historical.prices.length - 1]
+                  ? ' increase ' : ' decrease '}
+                over the next {predictionDays} trading days with {forecastData.metrics.confidence}% confidence.
+              </p>
+              <p className="mt-2 text-gray-700">
+                Last close: ₹{forecastData.historical.prices[forecastData.historical.prices.length - 1].toFixed(2)}
+              </p>
+              <p className="text-gray-700">
+                Predicted {predictionDays} day{predictionDays > 1 ? 's' : ''} later: 
+                ₹{forecastData.forecast.prices[forecastData.forecast.prices.length - 1].toFixed(2)}
+                {' '}
+                ({((forecastData.forecast.prices[forecastData.forecast.prices.length - 1] - 
+                   forecastData.historical.prices[forecastData.historical.prices.length - 1]) / 
+                   forecastData.historical.prices[forecastData.historical.prices.length - 1] * 100).toFixed(2)}%)
+              </p>
             </div>
           </div>
         )}
 
-        {!loading && !error && !selectedSymbol && (
+        {!loading && !error && !forecastData && selectedSymbol && (
           <div className="flex justify-center items-center h-96">
-            <div className="text-xl text-gray-500">
-              Please select a stock to view price forecast
-            </div>
+            <div className="text-xl text-gray-500">No forecast data available for the selected stock.</div>
           </div>
         )}
 
-        <div className="mt-4">
-          <p className="text-sm text-gray-500">
-            Data source: Yahoo Finance | Last updated: {new Date().toLocaleString()}
-          </p>
-        </div>
+        {!loading && !error && !forecastData && !selectedSymbol && (
+          <div className="flex justify-center items-center h-96">
+            <div className="text-xl text-gray-500">Please select a stock to view forecast predictions.</div>
+          </div>
+        )}
       </div>
     </div>
   );

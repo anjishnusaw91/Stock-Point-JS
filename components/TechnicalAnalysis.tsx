@@ -1,18 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import dynamic from 'next/dynamic';
-import { ApexOptions } from 'apexcharts';
+import React, { useState, useEffect } from 'react';
 import { TECHNICAL_INDICATORS } from '../constants/indicators';
-import { StockSymbol, TechnicalData, Indicator } from '@/types/technical';
+import { StockSymbol, TechnicalData } from '@/types/technical';
 import { ChartControls } from './charts/ChartControls';
 import { PriceChart } from './charts/PriceChart';
-import { IndicatorChart } from './charts/IndicatorChart';
 import { RSIChart } from './charts/RSIChart';
 import { MACDChart } from './charts/MACDChart';
 import { VolumeChart } from './charts/VolumeChart';
-
-const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
 const TechnicalAnalysis: React.FC = () => {
   const [symbols, setSymbols] = useState<StockSymbol[]>([]);
@@ -38,17 +33,28 @@ const TechnicalAnalysis: React.FC = () => {
 
   const fetchSymbols = async () => {
     try {
+      setLoading(true);
       const response = await fetch('/api/nseStocks');
       const data = await response.json();
       if (data.success) {
         setSymbols(data.data);
+        if (data.data.length > 0 && !selectedSymbol) {
+          setSelectedSymbol(data.data[0].symbol);
+        }
+      } else {
+        throw new Error(data.error || 'Failed to fetch symbols');
       }
     } catch (error) {
       console.error('Error fetching symbols:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred while fetching symbols');
+    } finally {
+      setLoading(false);
     }
   };
 
   const fetchTechnicalData = async () => {
+    if (!selectedSymbol) return;
+    
     setLoading(true);
     setError(null);
 
@@ -64,11 +70,16 @@ const TechnicalAnalysis: React.FC = () => {
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const data = await response.json();
-      if (!data.success) throw new Error(data.error);
+      if (!data.success) throw new Error(data.error || 'Failed to fetch technical data');
       setTechnicalData(data.data);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An error occurred');
+      setTechnicalData(null);
     } finally {
       setLoading(false);
     }
@@ -115,19 +126,10 @@ const TechnicalAnalysis: React.FC = () => {
             {selectedIndicators.includes('volume') && (
               <VolumeChart data={technicalData} />
             )}
-
-            {selectedIndicators
-              .filter(id => 
-                TECHNICAL_INDICATORS.find(i => i.id === id)?.type === 'separate'
-              )
-              .map(id => (
-                <IndicatorChart
-                  key={id}
-                  indicator={TECHNICAL_INDICATORS.find(i => i.id === id)!}
-                  data={technicalData}
-                />
-              ))
-            }
+          </div>
+        ) : selectedSymbol ? (
+          <div className="flex justify-center items-center h-96">
+            <div className="text-xl text-gray-500">No data available for the selected symbol and time range</div>
           </div>
         ) : null}
       </div>

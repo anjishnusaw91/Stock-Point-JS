@@ -9,31 +9,56 @@ export async function POST(req: Request) {
       throw new Error('Stock symbol is required');
     }
 
+    // Suppress Yahoo Finance deprecation notice
+    yahooFinance.suppressNotices(['ripHistorical']);
+
     // Add .NS suffix if not present
     const nseSymbol = symbol.endsWith('.NS') ? symbol : `${symbol}.NS`;
 
     const queryOptions = {
       period1: new Date(startDate || '2024-01-01'),
       period2: new Date(endDate || new Date()),
-      interval: '1d' as '1d' | '1wk' | '1mo',
+      interval: '1d' as const,
     };
 
     console.log(`Fetching data for ${nseSymbol}...`);
-    const result = await yahooFinance.historical(nseSymbol, queryOptions);
-    console.log('Data received:', result.length, 'records');
-
-    if (!result || result.length === 0) {
+    
+    // Use chart() instead of historical()
+    const result = await yahooFinance.chart(nseSymbol, queryOptions);
+    
+    if (!result || !result.quotes || result.quotes.length === 0) {
       throw new Error('No data received from Yahoo Finance');
     }
 
-    const formattedData = result.map((item) => ({
-      date: item.date.toISOString().split('T')[0],
-      open: Number(item.open.toFixed(2)),
-      high: Number(item.high.toFixed(2)),
-      low: Number(item.low.toFixed(2)),
-      close: Number(item.close.toFixed(2)),
-      volume: item.volume,
-    }));
+    console.log('Data received:', result.quotes.length, 'records');
+
+    // Map chart data to our expected format with validation
+    const formattedData = result.quotes
+      .filter(item => 
+        item && 
+        item.date &&
+        typeof item.open === 'number' && !isNaN(item.open) &&
+        typeof item.high === 'number' && !isNaN(item.high) &&
+        typeof item.low === 'number' && !isNaN(item.low) &&
+        typeof item.close === 'number' && !isNaN(item.close) &&
+        typeof item.volume === 'number'
+      )
+      .map(item => {
+        try {
+          return {
+            date: new Date(item.date).toISOString().split('T')[0],
+            open: Number(item.open),
+            high: Number(item.high),
+            low: Number(item.low),
+            close: Number(item.close),
+            volume: Number(item.volume || 0),
+          };
+        } catch (err) {
+          console.error('Error formatting item:', err);
+          return null;
+        }
+      })
+      .filter(item => item !== null);  // Remove any null items
 
     return NextResponse.json({
       success: true,

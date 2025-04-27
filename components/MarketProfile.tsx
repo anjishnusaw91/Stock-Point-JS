@@ -4,7 +4,10 @@ import ApexCharts from 'apexcharts';
 
 type ApexOptions = ApexCharts.ApexOptions;
 const Chart = dynamic(() => import('react-apexcharts'), { 
-  ssr: false 
+  ssr: false,
+  loading: () => <div className="flex justify-center items-center h-[500px]">
+    <div className="text-xl">Loading chart component...</div>
+  </div>
 }) as React.ComponentType<any>;
 
 interface StockData {
@@ -32,6 +35,7 @@ const MarketProfile: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [symbols, setSymbols] = useState<StockSymbol[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string>('');
+  const [chartKey, setChartKey] = useState<number>(0); // Used to force re-render
   const [dateRange, setDateRange] = useState({
     startDate: '2024-01-01',
     endDate: new Date().toISOString().split('T')[0],
@@ -57,7 +61,10 @@ const MarketProfile: React.FC = () => {
   // Fetch stock data when symbol or date range changes
   useEffect(() => {
     const fetchStockData = async () => {
-      if (!selectedSymbol) return;
+      if (!selectedSymbol) {
+        setStockData([]);
+        return;
+      }
 
       setLoading(true);
       setError(null);
@@ -89,10 +96,24 @@ const MarketProfile: React.FC = () => {
           throw new Error('Invalid data format received');
         }
 
-        setStockData(data.data);
+        // Validate the data before setting it
+        const validData = data.data.filter((item: any) => (
+          item &&
+          typeof item === 'object' &&
+          item.date && 
+          typeof item.date === 'string' &&
+          typeof item.open === 'number' && !isNaN(item.open) &&
+          typeof item.high === 'number' && !isNaN(item.high) &&
+          typeof item.low === 'number' && !isNaN(item.low) &&
+          typeof item.close === 'number' && !isNaN(item.close)
+        ));
+
+        setStockData(validData);
+        setChartKey(prev => prev + 1); // Force chart re-render with new data
       } catch (err) {
         console.error('Error in fetchStockData:', err);
         setError(err instanceof Error ? err.message : 'An error occurred');
+        setStockData([]);
       } finally {
         setLoading(false);
       }
@@ -101,17 +122,69 @@ const MarketProfile: React.FC = () => {
     fetchStockData();
   }, [selectedSymbol, dateRange]);
 
-  const chartOptions: ApexOptions = {
+  // Process and validate chart data
+  const chartSeries = React.useMemo(() => {
+    if (!stockData || !stockData.length) return [];
+    
+    try {
+      const validData = stockData
+        .filter((item: StockData) => (
+          item && 
+          item.date && 
+          !isNaN(Number(item.open)) && 
+          !isNaN(Number(item.high)) && 
+          !isNaN(Number(item.low)) && 
+          !isNaN(Number(item.close))
+        ))
+        .map((item: StockData): ChartDataPoint | null => {
+          try {
+            const timestamp = new Date(item.date).getTime();
+            if (isNaN(timestamp)) {
+              return null;
+            }
+            
+            return {
+              x: timestamp,
+              y: [
+                Number(item.open), 
+                Number(item.high), 
+                Number(item.low), 
+                Number(item.close)
+              ]
+            };
+          } catch (e) {
+            console.error('Error processing data point:', e);
+            return null;
+          }
+        })
+        .filter((point): point is ChartDataPoint => point !== null);
+
+      if (!validData.length) return [];
+      
+      return [{
+        name: selectedSymbol,
+        data: validData,
+      }];
+    } catch (error) {
+      console.error('Error generating chart series:', error);
+      return [];
+    }
+  }, [stockData, selectedSymbol]);
+
+  const chartOptions: ApexOptions = React.useMemo(() => ({
     chart: {
       type: 'candlestick',
       height: 500,
       animations: {
-        enabled: true,
+        enabled: false, // Disable animations to prevent rendering issues
       },
       background: '#fff',
+      toolbar: {
+        show: true,
+      }
     },
     title: {
-      text: `${selectedSymbol} Stock Price`,
+      text: selectedSymbol ? `${selectedSymbol} Stock Price` : 'Stock Price',
       align: 'center',
     },
     xaxis: {
@@ -126,25 +199,69 @@ const MarketProfile: React.FC = () => {
         enabled: true,
       },
       labels: {
-        formatter: (value) => `₹${value.toFixed(2)}`,
+        formatter: (value) => {
+          if (typeof value !== 'number' || isNaN(value)) {
+            return 'N/A';
+          }
+          return `₹${value.toFixed(2)}`;
+        },
       },
     },
     tooltip: {
       enabled: true,
       theme: 'dark',
+      x: {
+        format: 'dd MMM yyyy'
+      }
     },
     grid: {
       show: true,
     },
-  };
+    plotOptions: {
+      candlestick: {
+        colors: {
+          upward: '#26a69a',
+          downward: '#ef5350'
+        }
+      }
+    },
+    noData: {
+      text: 'No data available',
+      align: 'center',
+      verticalAlign: 'middle',
+      offsetX: 0,
+      offsetY: 0,
+      style: {
+        color: '#999',
+        fontSize: '14px',
+        fontFamily: 'inherit',
+      }
+    }
+  }), [selectedSymbol]);
 
-  const chartSeries = [{
-    name: selectedSymbol,
-    data: stockData.map((item: StockData): ChartDataPoint => ({
-      x: new Date(item.date).getTime(),
-      y: [item.open, item.high, item.low, item.close],
-    })),
-  }];
+  const renderChart = () => {
+    // Only render chart when we have valid data
+    if (!chartSeries || !chartSeries.length || !chartSeries[0].data.length) {
+      return (
+        <div className="flex justify-center items-center h-[500px]">
+          <div className="text-xl text-gray-500">
+            No data available to display
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <Chart
+        key={chartKey} // Force re-render when data changes
+        options={chartOptions}
+        series={chartSeries}
+        type="candlestick"
+        height={500}
+        width="100%"
+      />
+    );
+  };
 
   return (
     <div className="p-4">
@@ -224,22 +341,17 @@ const MarketProfile: React.FC = () => {
           </div>
         )}
 
-        {!loading && !error && selectedSymbol && stockData.length > 0 && (
-          <div className="w-full h-[600px]">
-            <Chart
-              options={chartOptions}
-              series={chartSeries}
-              type="candlestick"
-              height={500}
-            />
-          </div>
-        )}
-
-        {!loading && !error && !selectedSymbol && (
-          <div className="flex justify-center items-center h-96">
-            <div className="text-xl text-gray-500">
-              Please select a stock to view its data
-            </div>
+        {!loading && !error && (
+          <div className="w-full">
+            {!selectedSymbol ? (
+              <div className="flex justify-center items-center h-96">
+                <div className="text-xl text-gray-500">
+                  Please select a stock to view its data
+                </div>
+              </div>
+            ) : (
+              renderChart()
+            )}
           </div>
         )}
 

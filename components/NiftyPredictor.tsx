@@ -4,7 +4,8 @@ import ApexCharts from 'apexcharts';
 
 type ApexOptions = ApexCharts.ApexOptions;
 const Chart = dynamic(() => import('react-apexcharts'), { 
-  ssr: false 
+  ssr: false,
+  loading: () => <div>Loading Chart...</div>
 }) as React.ComponentType<any>;
 
 interface PredictionData {
@@ -42,6 +43,7 @@ const NiftyPredictor: React.FC = () => {
     startDate: '2024-01-01',
     endDate: new Date().toISOString().split('T')[0],
   });
+  const [chartReady, setChartReady] = useState(false);
 
   // Fetch available NSE symbols
   useEffect(() => {
@@ -67,6 +69,7 @@ const NiftyPredictor: React.FC = () => {
 
       setLoading(true);
       setError(null);
+      setChartReady(false);
 
       try {
         const response = await fetch('/api/stockPredictor', {
@@ -94,6 +97,7 @@ const NiftyPredictor: React.FC = () => {
         setPredictionData(data.data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
+        setPredictionData(null);
       } finally {
         setLoading(false);
       }
@@ -102,7 +106,20 @@ const NiftyPredictor: React.FC = () => {
     fetchPredictionData();
   }, [selectedSymbol, dateRange]);
 
-  const chartOptions: ApexOptions = {
+  // Set chart ready after data is loaded
+  useEffect(() => {
+    if (predictionData && predictionData.historicalData?.length > 0) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        setChartReady(true);
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      setChartReady(false);
+    }
+  }, [predictionData]);
+
+  const getChartOptions = (): ApexOptions => ({
     chart: {
       type: 'line',
       height: 500,
@@ -114,9 +131,10 @@ const NiftyPredictor: React.FC = () => {
         enabled: true,
         type: 'x',
       },
+      fontFamily: 'inherit',
     },
     title: {
-      text: `${selectedSymbol} Price Analysis`,
+      text: selectedSymbol ? `${selectedSymbol} Price Analysis` : 'Price Analysis',
       align: 'center',
     },
     xaxis: {
@@ -131,7 +149,11 @@ const NiftyPredictor: React.FC = () => {
         text: 'Price (₹)',
       },
       labels: {
-        formatter: (value) => `₹${value.toFixed(2)}`,
+        formatter: (value) => {
+          const num = Number(value);
+          if (isNaN(num)) return 'N/A';
+          return `₹${num.toFixed(2)}`;
+        },
       },
     },
     tooltip: {
@@ -140,7 +162,11 @@ const NiftyPredictor: React.FC = () => {
         format: 'dd MMM yyyy',
       },
       y: {
-        formatter: (value) => `₹${value.toFixed(2)}`,
+        formatter: (value) => {
+          const num = Number(value);
+          if (isNaN(num)) return 'N/A';
+          return `₹${num.toFixed(2)}`;
+        },
       },
     },
     legend: {
@@ -153,31 +179,75 @@ const NiftyPredictor: React.FC = () => {
       dashArray: [0, 0, 0],
     },
     colors: ['#2E93fA', '#66DA26', '#FF9800'],
-  };
+  });
 
-  const chartSeries = predictionData ? [
-    {
-      name: 'Price',
-      data: predictionData.historicalData.map((item) => ({
-        x: new Date(item.date).getTime(),
-        y: item.close,
-      })),
-    },
-    {
-      name: 'SMA20',
-      data: predictionData.historicalData.map((item) => ({
-        x: new Date(item.date).getTime(),
-        y: item.sma20,
-      })),
-    },
-    {
-      name: 'SMA50',
-      data: predictionData.historicalData.map((item) => ({
-        x: new Date(item.date).getTime(),
-        y: item.sma50,
-      })),
-    },
-  ] : [];
+  const getChartSeries = () => {
+    if (!predictionData || !predictionData.historicalData || predictionData.historicalData.length === 0) {
+      return [];
+    }
+
+    try {
+      return [
+        {
+          name: 'Price',
+          data: predictionData.historicalData
+            .filter(item => item && item.date && item.close !== undefined && item.close !== null)
+            .map((item) => {
+              try {
+                const timestamp = new Date(item.date).getTime();
+                if (isNaN(timestamp)) return null;
+                return {
+                  x: timestamp,
+                  y: Number(item.close),
+                };
+              } catch (e) {
+                return null;
+              }
+            })
+            .filter((point): point is NonNullable<typeof point> => point !== null),
+        },
+        {
+          name: 'SMA20',
+          data: predictionData.historicalData
+            .filter(item => item && item.date && item.sma20 !== undefined && item.sma20 !== null)
+            .map((item) => {
+              try {
+                const timestamp = new Date(item.date).getTime();
+                if (isNaN(timestamp)) return null;
+                return {
+                  x: timestamp,
+                  y: Number(item.sma20),
+                };
+              } catch (e) {
+                return null;
+              }
+            })
+            .filter((point): point is NonNullable<typeof point> => point !== null),
+        },
+        {
+          name: 'SMA50',
+          data: predictionData.historicalData
+            .filter(item => item && item.date && item.sma50 !== undefined && item.sma50 !== null)
+            .map((item) => {
+              try {
+                const timestamp = new Date(item.date).getTime();
+                if (isNaN(timestamp)) return null;
+                return {
+                  x: timestamp,
+                  y: Number(item.sma50),
+                };
+              } catch (e) {
+                return null;
+              }
+            })
+            .filter((point): point is NonNullable<typeof point> => point !== null),
+        },
+      ];
+    } catch (error) {
+      console.error("Error generating chart series:", error);
+      return [];
+    }
+  };
 
   return (
     <div className="p-4">
@@ -221,7 +291,7 @@ const NiftyPredictor: React.FC = () => {
             />
           </div>
 
-    <div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               End Date
             </label>
@@ -258,73 +328,97 @@ const NiftyPredictor: React.FC = () => {
         )}
 
         {!loading && !error && predictionData && (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className={`p-4 rounded-lg ${
-                predictionData.prediction.trend === 'bullish' ? 'bg-green-100' :
-                predictionData.prediction.trend === 'bearish' ? 'bg-red-100' :
-                'bg-yellow-100'
-              }`}>
-                <h3 className="font-bold text-lg mb-2">Prediction</h3>
-                <p className="text-lg font-semibold">
-                  {predictionData.prediction.trend.toUpperCase()}
-                </p>
-                <p className="text-sm">
-                  Probability: {predictionData.prediction.probability.toFixed(2)}%
-                </p>
-              </div>
-
-              <div className="p-4 rounded-lg bg-gray-100">
-                <h3 className="font-bold text-lg mb-2">Technical Indicators</h3>
-                <div className="space-y-1">
-                  <p>RSI: {predictionData.rsi.toFixed(2)}</p>
-                  <p>Momentum: {predictionData.momentum.toFixed(2)}%</p>
-                  <p>Volatility: {predictionData.volatility.toFixed(2)}%</p>
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-lg border p-4 space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Prediction</h3>
+                  <div className={`text-2xl font-bold ${
+                    predictionData.prediction.trend === 'bullish' ? 'text-green-500' :
+                    predictionData.prediction.trend === 'bearish' ? 'text-red-500' :
+                    'text-yellow-500'
+                  }`}>
+                    {predictionData.prediction.trend.toUpperCase()} 
+                    <span className="text-gray-500 text-lg ml-2">
+                      ({predictionData.prediction.probability.toFixed(2)}%)
+                    </span>
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="text-md font-medium">Reasons:</h4>
+                  <ul className="list-disc pl-5 text-sm text-gray-600">
+                    {predictionData.prediction.reason.map((reason, idx) => (
+                      <li key={idx}>{reason}</li>
+                    ))}
+                  </ul>
                 </div>
               </div>
-
-              <div className="p-4 rounded-lg bg-gray-100">
-                <h3 className="font-bold text-lg mb-2">Moving Averages</h3>
-                <div className="space-y-1">
-                  <p>SMA20: ₹{predictionData.sma20.toFixed(2)}</p>
-                  <p>SMA50: ₹{predictionData.sma50.toFixed(2)}</p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-lg border p-4">
+                  <div className="text-sm text-gray-500">RSI (14)</div>
+                  <div className="text-xl font-semibold">{predictionData.rsi.toFixed(2)}</div>
+                </div>
+                
+                <div className="bg-white rounded-lg border p-4">
+                  <div className="text-sm text-gray-500">SMA 20</div>
+                  <div className="text-xl font-semibold">₹{predictionData.sma20.toFixed(2)}</div>
+                </div>
+                
+                <div className="bg-white rounded-lg border p-4">
+                  <div className="text-sm text-gray-500">SMA 50</div>
+                  <div className="text-xl font-semibold">₹{predictionData.sma50.toFixed(2)}</div>
+                </div>
+                
+                <div className="bg-white rounded-lg border p-4">
+                  <div className="text-sm text-gray-500">Std Deviation</div>
+                  <div className="text-xl font-semibold">{predictionData.standardDeviation.toFixed(4)}</div>
+                </div>
+                
+                <div className="bg-white rounded-lg border p-4">
+                  <div className="text-sm text-gray-500">Volatility</div>
+                  <div className="text-xl font-semibold">{predictionData.volatility.toFixed(2)}%</div>
+                </div>
+                
+                <div className="bg-white rounded-lg border p-4">
+                  <div className="text-sm text-gray-500">Momentum</div>
+                  <div className="text-xl font-semibold">{predictionData.momentum.toFixed(2)}</div>
                 </div>
               </div>
             </div>
-
-            <div className="mb-6">
-              <h3 className="font-bold text-lg mb-2">Analysis Reasons</h3>
-              <ul className="list-disc list-inside space-y-1">
-                {predictionData.prediction.reason.map((reason, index) => (
-                  <li key={index} className="text-gray-700">{reason}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="w-full h-[600px]">
-              <Chart
-                options={chartOptions}
-                series={chartSeries}
-                type="line"
-                height={500}
-              />
-            </div>
-          </>
-        )}
-
-        {!loading && !error && !selectedSymbol && (
-          <div className="flex justify-center items-center h-96">
-            <div className="text-xl text-gray-500">
-              Please select a stock to view prediction analysis
+            
+            <div className="bg-white rounded-lg border p-4 h-[500px]">
+              {chartReady ? (
+                <div className="w-full h-full">
+                  <Chart 
+                    options={getChartOptions()} 
+                    series={getChartSeries()} 
+                    type="line" 
+                    height="100%"
+                    width="100%"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-gray-500">Preparing chart...</div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        <div className="mt-4">
-          <p className="text-sm text-gray-500">
-            Data source: Yahoo Finance | Last updated: {new Date().toLocaleString()}
-          </p>
-        </div>
+        {!loading && !error && !predictionData && selectedSymbol && (
+          <div className="flex justify-center items-center h-96">
+            <div className="text-xl text-gray-500">No data available for the selected stock.</div>
+          </div>
+        )}
+
+        {!loading && !error && !predictionData && !selectedSymbol && (
+          <div className="flex justify-center items-center h-96">
+            <div className="text-xl text-gray-500">Please select a stock to view predictions.</div>
+          </div>
+        )}
       </div>
     </div>
   );
