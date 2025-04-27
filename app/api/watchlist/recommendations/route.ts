@@ -9,13 +9,13 @@ function generateRecommendation(
 ): { action: 'BUY' | 'SELL' | 'HOLD'; confidence: number; reasoning: string } {
   try {
     // Extract key metrics
-    const currentPrice = stockData.price || 0;
-    const previousClose = stockData.previousClose || 0;
-    const fiftyDayAvg = stockData.fiftyDayAverage || 0;
-    const twoHundredDayAvg = stockData.twoHundredDayAverage || 0;
-    const beta = stockData.beta || 1;
-    const pe = stockData.trailingPE || 0;
-    const targetPrice = stockData.targetMeanPrice || 0;
+    const currentPrice = stockData.price ?? 0;
+    const previousClose = stockData.previousClose ?? 0;
+    const fiftyDayAvg = stockData.fiftyDayAverage ?? 0;
+    const twoHundredDayAvg = stockData.twoHundredDayAverage ?? 0;
+    const beta = stockData.beta ?? 1;
+    const pe = stockData.trailingPE ?? 0;
+    const targetPrice = stockData.targetMeanPrice ?? 0;
     const rsi = calculateRSI(priceHistory);
     
     // Collect signals - positive signals increase buy recommendation
@@ -73,7 +73,7 @@ function generateRecommendation(
     }
     
     // Daily change
-    const dailyChangePercent = ((currentPrice - previousClose) / previousClose) * 100;
+    const dailyChangePercent = previousClose !== 0 ? ((currentPrice - previousClose) / previousClose) * 100 : 0;
     if (dailyChangePercent > 5) {
       signals -= 1; // Profit taking
       reasons.push(`Large daily gain (${dailyChangePercent.toFixed(1)}%) may present profit-taking opportunity`);
@@ -201,18 +201,18 @@ export async function POST(req: Request) {
           return {
             symbol: stock.symbol,
             name: quote.displayName || quote.shortName || stock.symbol,
-            current_price: quote.regularMarketPrice,
-            previous_close: quote.regularMarketPreviousClose,
-            change: quote.regularMarketChange,
-            change_percent: quote.regularMarketChangePercent,
-            day_high: quote.regularMarketDayHigh,
-            day_low: quote.regularMarketDayLow,
-            volume: quote.regularMarketVolume,
-            avg_volume: quote.averageDailyVolume3Month,
-            market_cap: modules.summaryDetail?.marketCap,
-            pe_ratio: modules.summaryDetail?.trailingPE,
-            fifty_day_avg: quote.fiftyDayAverage,
-            two_hundred_day_avg: quote.twoHundredDayAverage,
+            current_price: quote.regularMarketPrice ?? 0,
+            previous_close: quote.regularMarketPreviousClose ?? 0,
+            change: quote.regularMarketChange ?? 0,
+            change_percent: quote.regularMarketChangePercent ?? 0,
+            day_high: quote.regularMarketDayHigh ?? 0,
+            day_low: quote.regularMarketDayLow ?? 0,
+            volume: quote.regularMarketVolume ?? 0,
+            avg_volume: quote.averageDailyVolume3Month ?? 0,
+            market_cap: modules.summaryDetail?.marketCap ?? 0,
+            pe_ratio: modules.summaryDetail?.trailingPE ?? 0,
+            fifty_day_avg: quote.fiftyDayAverage ?? 0,
+            two_hundred_day_avg: quote.twoHundredDayAverage ?? 0,
             recommendation: recommendation.action,
             confidence: recommendation.confidence,
             reasoning: recommendation.reasoning

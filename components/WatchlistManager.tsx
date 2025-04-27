@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, Watchlist, WatchlistStock } from '@/lib/supabase';
 import yahooFinance from 'yahoo-finance2';
-import { FaEye, FaEyeSlash, FaArrowUp, FaArrowDown, FaTrash } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaArrowUp, FaArrowDown, FaTrash, FaChartLine } from 'react-icons/fa';
 import { FiTrendingUp, FiTrendingDown, FiAlertTriangle, FiBarChart2 } from 'react-icons/fi';
 
 interface StockSymbol {
@@ -71,6 +71,14 @@ const WatchlistManager: React.FC = () => {
     if (user) {
       fetchWatchlists();
       fetchSymbols();
+      
+      // Refresh data every 60 seconds for real-time updates
+      const intervalId = setInterval(() => {
+        console.log('Refreshing watchlist data...');
+        fetchWatchlists();
+      }, 60000);
+      
+      return () => clearInterval(intervalId);
     }
   }, [user]);
 
@@ -153,69 +161,46 @@ const WatchlistManager: React.FC = () => {
     if (!stocks.length) return [];
     
     try {
-      const symbols = stocks.map(stock => stock.symbol);
-      const uniqueSymbols = Array.from(new Set(symbols));
+      console.log('Fetching current prices for stocks:', stocks.map(s => s.symbol));
       
-      // Batch fetch stock data
-      const quotes = await Promise.all(
-        uniqueSymbols.map(async (symbol) => {
-          try {
-            const nseSymbol = symbol.endsWith('.NS') ? symbol : `${symbol}.NS`;
-            const quoteResult = await yahooFinance.quote(nseSymbol);
-            const quote = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
-            return { 
-              symbol, 
-              price: quote.regularMarketPrice,
-              previousClose: quote.regularMarketPreviousClose,
-              volume: quote.regularMarketVolume,
-              avgVolume: quote.averageDailyVolume3Month,
-              high: quote.regularMarketDayHigh,
-              low: quote.regularMarketDayLow
-            };
-          } catch (err) {
-            console.error(`Error fetching data for ${symbol}:`, err);
-            return { 
-              symbol, 
-              price: 0,
-              previousClose: 0,
-              volume: 0,
-              avgVolume: 0,
-              high: 0,
-              low: 0
-            };
-          }
-        })
-      );
-      
-      // Create a data lookup map
-      const dataMap = quotes.reduce((map: Record<string, any>, quote: any) => {
-        map[quote.symbol.replace('.NS', '')] = quote;
-        return map;
-      }, {} as Record<string, any>);
-      
-      // Add current prices and calculations to stocks
-      return stocks.map(stock => {
-        const data = dataMap[stock.symbol] || {};
-        const currentPrice = data.price || 0;
-        const previousClose = data.previousClose || 0;
-        const change = currentPrice - previousClose;
-        const changePercent = previousClose > 0 ? (change / previousClose * 100) : 0;
-        
-        return {
-          ...stock,
-          currentPrice,
-          previousClose,
-          change,
-          changePercent,
-          volume: data.volume,
-          avgVolume: data.avgVolume,
-          high: data.high,
-          low: data.low
-        };
+      // Call our dedicated watchlist data API
+      const response = await fetch('/api/watchlist/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ watchlistStocks: stocks }),
       });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Watchlist data API response:', data);
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch watchlist data');
+      }
+      
+      // API returns stocks with data already mapped
+      return data.data;
+      
     } catch (err) {
       console.error('Error fetching stock data:', err);
-      return stocks;
+      
+      // If API fails, return stocks with zero values
+      return stocks.map(stock => ({
+        ...stock,
+        currentPrice: 0,
+        previousClose: 0,
+        change: 0,
+        changePercent: 0,
+        volume: 0,
+        avgVolume: 0,
+        high: 0,
+        low: 0
+      }));
     }
   };
   
@@ -360,6 +345,9 @@ const WatchlistManager: React.FC = () => {
     setAnalysisError(null);
     
     try {
+      // Log the stocks data before sending to API
+      console.log('Stocks data for recommendations:', JSON.stringify(stocks, null, 2));
+      
       const response = await fetch('/api/watchlist/recommendations', {
         method: 'POST',
         headers: {
@@ -369,6 +357,7 @@ const WatchlistManager: React.FC = () => {
       });
       
       const data = await response.json();
+      console.log('Recommendations API response:', JSON.stringify(data, null, 2));
       
       if (!data.success) {
         throw new Error(data.error || 'Failed to generate stock recommendations');
@@ -728,66 +717,88 @@ const WatchlistManager: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {currentWatchlist.stocks.map((stock) => (
-                            <tr key={stock.id} className="border-b border-gray-200 hover:bg-gray-50">
-                              <td className="p-3 text-left">
-                                <div className="font-medium">{stock.symbol}</div>
-                                {stock.notes && (
-                                  <div className="text-xs text-gray-500">{stock.notes}</div>
-                                )}
-                              </td>
-                              <td className="p-3 text-right font-medium">
-                                ₹{(stock.currentPrice || 0).toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2
-                                })}
-                              </td>
-                              <td className={`p-3 text-right ${
-                                (stock.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                <div className="flex items-center justify-end">
-                                  {(stock.change || 0) >= 0 ? <FaArrowUp className="mr-1" size={12} /> : <FaArrowDown className="mr-1" size={12} />}
-                                  ₹{Math.abs(stock.change || 0).toLocaleString(undefined, {
+                          {currentWatchlist.stocks.map((stock) => {
+                            // Check if this stock has a BUY recommendation
+                            const recommendation = stockRecommendations?.stocks.find(rec => rec.symbol === stock.symbol);
+                            const isBuyRecommended = recommendation?.recommendation === 'BUY' && recommendation?.confidence > 60;
+                            
+                            return (
+                              <tr 
+                                key={stock.id} 
+                                className={`border-b border-gray-200 hover:bg-gray-50 ${isBuyRecommended ? 'bg-green-50' : ''}`}
+                              >
+                                <td className="p-3 text-left">
+                                  <div className="font-medium">
+                                    {stock.symbol}
+                                    {recommendation && (
+                                      <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
+                                        recommendation.recommendation === 'BUY' 
+                                          ? 'bg-green-100 text-green-800' 
+                                          : recommendation.recommendation === 'SELL'
+                                            ? 'bg-red-100 text-red-800'
+                                            : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        {recommendation.recommendation} ({recommendation.confidence}%)
+                                      </span>
+                                    )}
+                                  </div>
+                                  {stock.notes && (
+                                    <div className="text-xs text-gray-500">{stock.notes}</div>
+                                  )}
+                                </td>
+                                <td className="p-3 text-right font-medium">
+                                  {`₹${stock.currentPrice.toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2
+                                    })}`}
+                                </td>
+                                <td className={`p-3 text-right ${
+                                  stock.change >= 0 ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  <div className="flex items-center justify-end">
+                                    {stock.change >= 0 ? <FaArrowUp className="mr-1" size={12} /> : <FaArrowDown className="mr-1" size={12} />}
+                                    ₹{Math.abs(stock.change).toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2
+                                    })}
+                                  </div>
+                                </td>
+                                <td className={`p-3 text-right ${
+                                  stock.changePercent >= 0 ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  {stock.changePercent >= 0 ? '+' : '-'}
+                                  {Math.abs(stock.changePercent).toFixed(2)}%
+                                </td>
+                                <td className="p-3 text-right text-gray-700">
+                                  <div>
+                                    {stock.volume.toLocaleString()}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    Avg: {stock.avgVolume.toLocaleString()}
+                                  </div>
+                                </td>
+                                <td className="p-3 text-right text-gray-700">
+                                  <div>H: ₹{stock.high.toLocaleString(undefined, {
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2
-                                  })}
-                                </div>
-                              </td>
-                              <td className={`p-3 text-right ${
-                                (stock.changePercent || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {(stock.changePercent || 0) >= 0 ? '+' : '-'}
-                                {Math.abs(stock.changePercent || 0).toFixed(2)}%
-                              </td>
-                              <td className="p-3 text-right text-gray-700">
-                                <div>
-                                  {(stock.volume || 0).toLocaleString()}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  Avg: {(stock.avgVolume || 0).toLocaleString()}
-                                </div>
-                              </td>
-                              <td className="p-3 text-right text-gray-700">
-                                <div>H: ₹{(stock.high || 0).toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2
-                                })}</div>
-                                <div>L: ₹{(stock.low || 0).toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2
-                                })}</div>
-                              </td>
-                              <td className="p-3 text-center">
-                                <button
-                                  onClick={() => handleRemoveStock(stock.id)}
-                                  className="text-red-500 hover:text-red-700 transition"
-                                  title="Remove from watchlist"
-                                >
-                                  <FaTrash />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                                  })}</div>
+                                  <div>L: ₹{stock.low.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}</div>
+                                </td>
+                                <td className="p-3 text-center">
+                                  <button
+                                    onClick={() => handleRemoveStock(stock.id)}
+                                    className="text-red-500 hover:text-red-700 transition"
+                                    title="Remove from watchlist"
+                                  >
+                                    <FaTrash />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
