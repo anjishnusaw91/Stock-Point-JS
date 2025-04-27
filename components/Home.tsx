@@ -6,7 +6,6 @@ import { supabase } from '../lib/supabaseClient';
 const db = {
   async getPortfolios(userId: string) {
     try {
-      // @ts-ignore - Bypass TypeScript error
       return await supabase.from('portfolios').select('id').eq('user_id', userId);
     } catch (error) {
       console.error('Error in getPortfolios:', error);
@@ -19,7 +18,6 @@ const db = {
       if (!portfolioIds || portfolioIds.length === 0) {
         return { data: [], error: null };
       }
-      // @ts-ignore - Bypass TypeScript error
       return await supabase.from('portfolio_stocks').select('*').in('portfolio_id', portfolioIds);
     } catch (error) {
       console.error('Error in getPortfolioStocks:', error);
@@ -29,7 +27,6 @@ const db = {
   
   async getWatchlists(userId: string) {
     try {
-      // @ts-ignore - Bypass TypeScript error
       return await supabase.from('watchlists').select('id').eq('user_id', userId);
     } catch (error) {
       console.error('Error in getWatchlists:', error);
@@ -42,7 +39,6 @@ const db = {
       if (!watchlistIds || watchlistIds.length === 0) {
         return { data: [], error: null };
       }
-      // @ts-ignore - Bypass TypeScript error
       return await supabase.from('watchlist_stocks').select('*').in('watchlist_id', watchlistIds);
     } catch (error) {
       console.error('Error in getWatchlistStocks:', error);
@@ -52,7 +48,6 @@ const db = {
   
   createSubscription(channel: string, table: string, callback: (payload: any) => void) {
     try {
-      // @ts-ignore - Bypass TypeScript error
       return supabase
         .channel(channel)
         .on('postgres_changes', 

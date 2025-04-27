@@ -22,7 +22,20 @@ try {
       signOut: async () => ({ error: null }),
       signInWithPassword: async () => ({ data: { user: null }, error: null }),
       signUp: async () => ({ data: { user: null }, error: null })
-    }
+    },
+    from: () => ({
+      select: () => ({
+        eq: async () => ({ data: [], error: null }),
+        in: async () => ({ data: [], error: null })
+      })
+    }),
+    channel: (channel: string) => ({
+      on: (event: string, config: any, callback: (payload: any) => void) => ({
+        subscribe: () => ({
+          unsubscribe: () => {}
+        })
+      })
+    })
   };
 }
 
@@ -36,7 +49,20 @@ export const mockSupabase = {
     signOut: async () => ({ error: null }),
     signInWithPassword: async () => ({ data: { user: null }, error: null }),
     signUp: async () => ({ data: { user: null }, error: null })
-  }
+  },
+  from: () => ({
+    select: () => ({
+      eq: async () => ({ data: [], error: null }),
+      in: async () => ({ data: [], error: null })
+    })
+  }),
+  channel: (channel: string) => ({
+    on: (event: string, config: any, callback: (payload: any) => void) => ({
+      subscribe: () => ({
+        unsubscribe: () => {}
+      })
+    })
+  })
 };
 
 // Default export
