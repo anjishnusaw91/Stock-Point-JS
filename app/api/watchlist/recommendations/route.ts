@@ -190,9 +190,9 @@ export async function POST(req: Request) {
             ...quote,
             price: quote.regularMarketPrice,
             previousClose: quote.regularMarketPreviousClose,
-            beta: modules.defaultKeyStatistics?.beta?.raw,
-            trailingPE: modules.summaryDetail?.trailingPE?.raw,
-            targetMeanPrice: modules.financialData?.targetMeanPrice?.raw
+            beta: modules.defaultKeyStatistics?.beta,
+            trailingPE: modules.summaryDetail?.trailingPE,
+            targetMeanPrice: modules.financialData?.targetMeanPrice
           };
           
           // Generate recommendation
@@ -209,8 +209,8 @@ export async function POST(req: Request) {
             day_low: quote.regularMarketDayLow,
             volume: quote.regularMarketVolume,
             avg_volume: quote.averageDailyVolume3Month,
-            market_cap: modules.summaryDetail?.marketCap?.raw,
-            pe_ratio: modules.summaryDetail?.trailingPE?.raw,
+            market_cap: modules.summaryDetail?.marketCap,
+            pe_ratio: modules.summaryDetail?.trailingPE,
             fifty_day_avg: quote.fiftyDayAverage,
             two_hundred_day_avg: quote.twoHundredDayAverage,
             recommendation: recommendation.action,

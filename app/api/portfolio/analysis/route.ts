@@ -67,9 +67,9 @@ export async function POST(req: Request) {
           
           // Extract sector and other fundamental data
           const sector = moduleInfo.summaryProfile?.sector || 'Unknown';
-          const beta = moduleInfo.defaultKeyStatistics?.beta?.raw || 0;
-          const peRatio = moduleInfo.summaryDetail?.trailingPE?.raw || 0;
-          const dividendYield = moduleInfo.summaryDetail?.dividendYield?.raw || 0;
+          const beta = moduleInfo.defaultKeyStatistics?.beta || 0;
+          const peRatio = moduleInfo.summaryDetail?.trailingPE || 0;
+          const dividendYield = moduleInfo.summaryDetail?.dividendYield || 0;
           const fiftyDayAvg = quote.fiftyDayAverage || 0;
           const twoHundredDayAvg = quote.twoHundredDayAverage || 0;
           

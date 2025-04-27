@@ -37,9 +37,9 @@ export async function POST(req: Request) {
             dayHigh: quote.regularMarketDayHigh || 0,
             dayLow: quote.regularMarketDayLow || 0,
             volume: quote.regularMarketVolume || 0,
-            beta: modules.defaultKeyStatistics?.beta?.raw || 0,
-            pe: modules.summaryDetail?.trailingPE?.raw || 0,
-            dividendYield: modules.summaryDetail?.dividendYield?.raw || 0,
+            beta: modules.defaultKeyStatistics?.beta || 0,
+            pe: modules.summaryDetail?.trailingPE || 0,
+            dividendYield: modules.summaryDetail?.dividendYield || 0,
             fiftyDayAvg: quote.fiftyDayAverage || 0,
             twoHundredDayAvg: quote.twoHundredDayAverage || 0
           };
