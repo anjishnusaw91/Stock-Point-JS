@@ -268,7 +268,6 @@ const PortfolioManager: React.FC = () => {
           volume: stockData.volume,
           beta: stockData.beta,
           pe: stockData.pe,
-          dividendYield: stockData.dividendYield,
           fiftyDayAvg: stockData.fiftyDayAvg,
           twoHundredDayAvg: stockData.twoHundredDayAvg,
           totalValue,

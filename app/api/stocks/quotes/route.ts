@@ -51,15 +51,14 @@ export async function POST(req: Request) {
           dayHigh: quote.regularMarketDayHigh ?? 0,
           dayLow: quote.regularMarketDayLow ?? 0,
           volume: quote.regularMarketVolume ?? 0,
-          beta: quote.beta ?? null,
-          pe: quote.trailingPE ?? null,
-          dividendYield: quote.dividendYield ?? null,
-          fiftyDayAvg: quote.fiftyDayAverage ?? null,
-          twoHundredDayAvg: quote.twoHundredDayAverage ?? null,
+          beta: (quote as any).beta ?? null,
+          pe: (quote as any).trailingPE ?? null,
+          fiftyDayAvg: (quote as any).fiftyDayAverage ?? null,
+          twoHundredDayAvg: (quote as any).twoHundredDayAverage ?? null,
           shortName: quote.shortName ?? cleanSymbol,
           longName: quote.longName ?? null,
-          industry: quote.industry ?? null,
-          sector: quote.sector ?? null,
+          sector: (quote as any).sector ?? null,
+          industry: (quote as any).industry ?? null,
         };
         
         // Update cache
