@@ -18,6 +18,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'User ID is required' }, { status: 400 });
     }
 
+    // Declare validUpdateData with a flexible type that covers all possible use cases
+    let validUpdateData: Record<string, any>;
+
     // First, let's check the structure of the profiles table
     try {
       const { data: schemaInfo, error: schemaError } = await supabaseAdmin
@@ -36,7 +39,7 @@ export async function POST(req: Request) {
       if (!sampleRow) {
         console.log('No sample row found, creating basic update data');
         // If no row exists, use basic fields
-        var validUpdateData = {
+        validUpdateData = {
           id: profileData.id,
           full_name: profileData.full_name || null,
           updated_at: new Date().toISOString()
@@ -45,7 +48,7 @@ export async function POST(req: Request) {
         console.log('Sample row found, validating fields:', Object.keys(sampleRow));
         
         // Build an object with only the fields that exist in the database
-        var validUpdateData: Record<string, any> = { id: profileData.id };
+        validUpdateData = { id: profileData.id };
         
         // Check each field from the request against the schema
         for (const key in profileData) {
@@ -61,7 +64,7 @@ export async function POST(req: Request) {
     } catch (schemaErr) {
       console.error('Error validating schema:', schemaErr);
       // Fallback to basic update if schema check fails
-      var validUpdateData = {
+      validUpdateData = {
         id: profileData.id,
         full_name: profileData.full_name || null,
         updated_at: new Date().toISOString()

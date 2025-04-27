@@ -13,7 +13,14 @@ interface StockSymbol {
 }
 
 interface PortfolioWithStocks extends Portfolio {
-  stocks: (PortfolioStock & { currentPrice?: number; totalValue?: number; profitLoss?: number; profitLossPercent?: number })[];
+  stocks: (PortfolioStock & { 
+    currentPrice?: number; 
+    totalValue?: number; 
+    profitLoss?: number; 
+    profitLossPercent?: number;
+    dayHigh?: number;
+    dayLow?: number;
+  })[];
   totalValue: number;
   totalCost: number;
   totalProfitLoss: number;
@@ -194,7 +201,7 @@ const PortfolioManager: React.FC = () => {
       const quotes = data.data;
       
       // Create a data lookup map with all fetched information
-      const dataMap = quotes.reduce((map, quote) => {
+      const dataMap = quotes.reduce((map: Record<string, any>, quote: any) => {
         map[quote.symbol.replace('.NS', '')] = quote;
         return map;
       }, {} as Record<string, any>);

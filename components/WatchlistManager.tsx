@@ -188,7 +188,7 @@ const WatchlistManager: React.FC = () => {
       );
       
       // Create a data lookup map
-      const dataMap = quotes.reduce((map, quote) => {
+      const dataMap = quotes.reduce((map: Record<string, any>, quote: any) => {
         map[quote.symbol.replace('.NS', '')] = quote;
         return map;
       }, {} as Record<string, any>);
@@ -427,7 +427,7 @@ const WatchlistManager: React.FC = () => {
                       <span className={`text-sm flex items-center ${
                         stock.change >= 0 ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {stock.change >= 0 ? <FiArrowUp className="mr-1" /> : <FiArrowDown className="mr-1" />}
+                        {stock.change >= 0 ? <FaArrowUp className="mr-1" /> : <FaArrowDown className="mr-1" />}
                         {Math.abs(stock.change_percent).toFixed(2)}%
                       </span>
                     </div>
@@ -479,11 +479,11 @@ const WatchlistManager: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">₹{stock.current_price.toFixed(2)}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className={`flex items-center text-sm ${
-                        stock.change >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {stock.change >= 0 ? <FiArrowUp className="mr-1" /> : <FiArrowDown className="mr-1" />}
+                    <td className={`px-6 py-4 whitespace-nowrap ${
+                      stock.change >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      <div className="flex items-center justify-end">
+                        {stock.change >= 0 ? <FaArrowUp className="mr-1" /> : <FaArrowDown className="mr-1" />}
                         {Math.abs(stock.change_percent).toFixed(2)}%
                       </div>
                     </td>
