@@ -24,16 +24,17 @@ export async function GET(req: Request) {
 
     // Check if we have cached data that's still valid
     const now = Date.now();
-    if (cache[symbol] && now - cache[symbol].timestamp < CACHE_TTL) {
+    // Standardize symbol handling
+    const cleanSymbol = symbol.replace('.NS', '');
+    const nseSymbol = `${cleanSymbol}.NS`;
+
+    if (cache[nseSymbol] && now - cache[nseSymbol].timestamp < CACHE_TTL) {
       return NextResponse.json({
         success: true,
-        data: cache[symbol].data,
+        data: cache[nseSymbol].data,
         cached: true
       });
     }
-    
-    // Add .NS suffix if not present for NSE stocks
-    const nseSymbol = symbol.endsWith('.NS') ? symbol : `${symbol}.NS`;
     
     console.log(`Fetching live data for ${nseSymbol}...`);
     
@@ -108,7 +109,7 @@ export async function GET(req: Request) {
     };
     
     // Update cache
-    cache[symbol] = {
+    cache[nseSymbol] = {
       data: responseData,
       timestamp: now
     };

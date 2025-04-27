@@ -178,38 +178,80 @@ const PortfolioManager: React.FC = () => {
       
       console.log('Fetching current prices for symbols:', uniqueSymbols);
       
-      // Use server-side API endpoint instead of direct Yahoo Finance call
-      const response = await fetch('/api/stocks/quotes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ symbols: uniqueSymbols }),
-      });
+      // Try the bulk quotes endpoint first
+      let quotes;
+      let usedFallback = false;
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch stock quotes: ${response.status}`);
+      try {
+        const response = await fetch('/api/stocks/quotes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ symbols: uniqueSymbols }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch stock quotes: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch stock quotes');
+        }
+        
+        quotes = data.data;
+      } catch (error) {
+        // Fallback to individual live API calls if bulk endpoint fails
+        console.log('Bulk quotes endpoint failed, falling back to individual requests');
+        usedFallback = true;
+        
+        quotes = await Promise.all(
+          uniqueSymbols.map(async (symbol) => {
+            try {
+              const response = await fetch(`/api/stocks/live?symbol=${symbol}`);
+              const data = await response.json();
+              
+              if (!data.success) {
+                return { symbol, price: 0, error: data.error };
+              }
+              
+              return {
+                symbol: data.data.symbol,
+                price: data.data.currentPrice,
+                previousClose: data.data.previousClose,
+                dayHigh: data.data.high,
+                dayLow: data.data.low,
+                volume: data.data.volume,
+              };
+            } catch (err) {
+              console.error(`Error fetching live data for ${symbol}:`, err);
+              return { symbol, price: 0, error: 'Failed to fetch live data' };
+            }
+          })
+        );
       }
       
-      const data = await response.json();
-      console.log('Stock quotes response:', data);
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch stock quotes');
-      }
-      
-      const quotes = data.data;
+      console.log(`Stock quotes ${usedFallback ? '(fallback)' : ''} response:`, quotes);
       
       // Create a data lookup map with all fetched information
       const dataMap = quotes.reduce((map: Record<string, any>, quote: any) => {
-        map[quote.symbol.replace('.NS', '')] = quote;
+        // Standardize the symbols by removing .NS suffix
+        const keySymbol = quote.symbol.replace('.NS', '');
+        map[keySymbol] = quote;
         return map;
       }, {} as Record<string, any>);
       
       // Add current prices and calculations to stocks with detailed data
       const stocksWithData = stocks.map(stock => {
-        const stockData = dataMap[stock.symbol] || {};
+        // Standardize the symbol key by removing .NS suffix if present
+        const symbolKey = stock.symbol.replace('.NS', '');
+        const stockData = dataMap[symbolKey] || {};
+        
+        // Make sure we get the current price from the API data or fallback to 0
         const currentPrice = stockData.price || 0;
+        
+        // Calculate values based on current price and quantity
         const totalValue = stock.quantity * currentPrice;
         const totalCost = stock.quantity * stock.purchase_price;
         const profitLoss = totalValue - totalCost;
@@ -239,7 +281,17 @@ const PortfolioManager: React.FC = () => {
       return stocksWithData;
     } catch (err) {
       console.error('Error fetching current prices:', err);
-      return stocks;
+      // If all else fails, return stocks with calculated values based on purchase price
+      return stocks.map(stock => {
+        const totalValue = stock.quantity * stock.purchase_price;
+        return {
+          ...stock,
+          currentPrice: stock.purchase_price,
+          totalValue,
+          profitLoss: 0,
+          profitLossPercent: 0
+        };
+      });
     }
   };
   
