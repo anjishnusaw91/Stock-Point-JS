@@ -21,12 +21,13 @@ interface ForecastData {
   historical: {
     dates: string[];
     prices: number[];
-    predictions: (number | null)[];
+    predictions?: (number | null)[];
   };
   metrics: {
     accuracy: number;
     confidence: number;
-    rmse: number;
+    rmse?: number;
+    predictionDays?: number;
   };
 }
 
@@ -203,26 +204,28 @@ const GeneralForecaster: React.FC = () => {
         .filter((point): point is NonNullable<typeof point> => point !== null);
 
       // Process and validate prediction data points in historical period
-      const trainingPoints = forecastData.historical.dates
-        .map((date, index) => {
-          if (!date || !forecastData.historical.predictions[index]) return null;
-          
-          try {
-            const timestamp = new Date(date).getTime();
-            if (isNaN(timestamp)) return null;
+      const trainingPoints = forecastData.historical.predictions 
+        ? forecastData.historical.dates
+          .map((date, index) => {
+            if (!date || !forecastData.historical.predictions?.[index]) return null;
             
-            const prediction = Number(forecastData.historical.predictions[index]);
-            if (isNaN(prediction)) return null;
-            
-            return {
-              x: timestamp,
-              y: Number(prediction.toFixed(2)),
-            };
-          } catch (e) {
-            return null;
-          }
-        })
-        .filter((point): point is NonNullable<typeof point> => point !== null);
+            try {
+              const timestamp = new Date(date).getTime();
+              if (isNaN(timestamp)) return null;
+              
+              const prediction = Number(forecastData.historical.predictions[index]);
+              if (isNaN(prediction)) return null;
+              
+              return {
+                x: timestamp,
+                y: Number(prediction.toFixed(2)),
+              };
+            } catch (e) {
+              return null;
+            }
+          })
+          .filter((point): point is NonNullable<typeof point> => point !== null)
+        : [];
 
       // Process and validate forecast data points
       const forecastPoints = forecastData.forecast.dates
@@ -354,7 +357,7 @@ const GeneralForecaster: React.FC = () => {
                 <h3 className="text-lg font-semibold text-gray-700">RMSE</h3>
                 <div className="mt-2">
                   <span className="text-2xl font-bold text-amber-600">
-                    {forecastData.metrics.rmse.toFixed(2)}
+                    {forecastData.metrics.rmse?.toFixed(2) || 'N/A'}
                   </span>
                   <p className="text-sm text-gray-500">Root Mean Square Error</p>
                 </div>
@@ -386,7 +389,10 @@ const GeneralForecaster: React.FC = () => {
                 {forecastData.forecast.prices[forecastData.forecast.prices.length - 1] > 
                  forecastData.historical.prices[forecastData.historical.prices.length - 1]
                   ? ' increase ' : ' decrease '}
-                over the next {predictionDays} trading days with {forecastData.metrics.confidence}% confidence.
+                over the next {predictionDays} trading days with {forecastData.metrics.confidence.toFixed(2)}% confidence using Random Forest algorithm.
+              </p>
+              <p className="mt-2 text-sm text-purple-700 font-semibold">
+                Prediction accuracy: {forecastData.metrics.accuracy.toFixed(2)}%
               </p>
               <p className="mt-2 text-gray-700">
                 Last close: ₹{forecastData.historical.prices[forecastData.historical.prices.length - 1].toFixed(2)}
