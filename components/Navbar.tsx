@@ -71,8 +71,8 @@ export default function Navbar({ selectedTab, setSelectedTab, onLogout }: Navbar
         // Try to use real Supabase client first, fallback to mock if needed
         const client = mockSupabase || supabase;
         const { data: { user } } = await client.auth.getUser();
-        if ((user as any)?.email) {
-          setUserEmail((user as any).email);
+        if ((user as unknown as User)?.email) {
+          setUserEmail((user as unknown as User).email || null);
         }
       } catch (error) {
         console.error('Error getting user email:', error);
