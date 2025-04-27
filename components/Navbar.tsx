@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Menu, X, Search, User as UserIcon, LogOut, ChevronDown, BarChart, Activity, LineChart, PieChart, Briefcase, BookOpen } from 'lucide-react';
-import { supabase, mockSupabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -68,9 +68,7 @@ export default function Navbar({ selectedTab, setSelectedTab, onLogout }: Navbar
 
     const getUserEmail = async () => {
       try {
-        // Try to use real Supabase client first, fallback to mock if needed
-        const client = mockSupabase || supabase;
-        const { data: { user } } = await client.auth.getUser();
+        const { data: { user } } = await supabase.auth.getUser();
         if ((user as unknown as User)?.email) {
           setUserEmail((user as unknown as User).email || null);
         }
@@ -95,9 +93,7 @@ export default function Navbar({ selectedTab, setSelectedTab, onLogout }: Navbar
 
   const handleLogout = async () => {
     try {
-      // Try to use real Supabase client first, fallback to mock if needed
-      const client = mockSupabase || supabase;
-      await client.auth.signOut();
+      await supabase.auth.signOut();
       onLogout();
     } catch (error) {
       console.error('Error signing out:', error);

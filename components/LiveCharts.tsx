@@ -4,27 +4,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import apexcharts from 'apexcharts';
 import useSWR from 'swr';
+import stockSymbols, { StockSymbol } from '../lib/stockSymbols';
 
 // Dynamically import ApexCharts to avoid SSR issues
 const Chart = dynamic(() => import('react-apexcharts'), { ssr: false }) as React.ComponentType<any>;
-
-interface StockSymbol {
-  symbol: string;
-  name: string;
-}
-
-const STOCK_SYMBOLS: StockSymbol[] = [
-  { symbol: 'RELIANCE.NS', name: 'Reliance Industries' },
-  { symbol: 'TCS.NS', name: 'Tata Consultancy Services' },
-  { symbol: 'HDFCBANK.NS', name: 'HDFC Bank' },
-  { symbol: 'INFY.NS', name: 'Infosys' },
-  { symbol: 'ICICIBANK.NS', name: 'ICICI Bank' },
-  { symbol: 'TATAMOTORS.NS', name: 'Tata Motors' },
-  { symbol: 'SBIN.NS', name: 'State Bank of India' },
-  { symbol: 'BHARTIARTL.NS', name: 'Bharti Airtel' },
-  { symbol: 'AXISBANK.NS', name: 'Axis Bank' },
-  { symbol: 'HINDUNILVR.NS', name: 'Hindustan Unilever' },
-];
 
 // Fetcher function for SWR
 const fetcher = (url: string) => fetch(url).then(res => res.json());
@@ -241,7 +224,7 @@ const LiveCharts: React.FC = () => {
               className="rounded-md border border-gray-300 p-2"
             >
               <option value="">Select a stock</option>
-              {STOCK_SYMBOLS.map((stock) => (
+              {stockSymbols.map((stock) => (
                 <option key={stock.symbol} value={stock.symbol}>
                   {stock.name} ({stock.symbol.replace('.NS', '')})
                 </option>
@@ -249,9 +232,10 @@ const LiveCharts: React.FC = () => {
             </select>
             <button
               onClick={() => mutate()}
-              className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 transition text-sm"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              disabled={isLoading}
             >
-              Refresh Now
+              {isLoading ? 'Loading...' : 'Refresh'}
             </button>
           </div>
         </div>

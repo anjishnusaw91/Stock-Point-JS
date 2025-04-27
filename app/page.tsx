@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Navbar from '../components/Navbar'
 import Home from '../components/Home'
@@ -16,9 +16,10 @@ import SignupForm from '../components/SignupForm'
 import PortfolioManager from '../components/PortfolioManager'
 import WatchlistManager from '../components/WatchlistManager'
 import UserProfile from '../components/UserProfile'
-import { supabase, mockSupabase } from '../lib/supabaseClient'
+import { supabase } from '../lib/supabaseClient'
 
-export default function MainPage() {
+// Create a wrapper component that uses searchParams
+function PageContent() {
   const searchParams = useSearchParams();
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isSignup, setIsSignup] = useState(false)
@@ -43,9 +44,7 @@ export default function MainPage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
-        // Use mock client in development if needed
-        const client = mockSupabase || supabase;
-        const { data: { user } } = await client.auth.getUser();
+        const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           setIsAuthenticated(true);
         }
@@ -147,6 +146,15 @@ export default function MainPage() {
         {renderContent()}
       </main>
     </div>
+  )
+}
+
+// Main component with Suspense boundary
+export default function MainPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <PageContent />
+    </Suspense>
   )
 }
 
