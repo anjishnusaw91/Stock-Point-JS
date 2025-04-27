@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase, Watchlist, WatchlistStock } from '@/lib/supabase';
 import yahooFinance from 'yahoo-finance2';
 import { FaEye, FaEyeSlash, FaArrowUp, FaArrowDown, FaTrash } from 'react-icons/fa';
+import { FiTrendingUp, FiTrendingDown, FiAlertTriangle, FiBarChart2 } from 'react-icons/fi';
 
 interface StockSymbol {
   symbol: string;
@@ -24,6 +25,23 @@ interface WatchlistWithStocks extends Watchlist {
   })[];
 }
 
+interface StockRecommendation {
+  symbol: string;
+  name: string;
+  current_price: number;
+  previous_close: number;
+  change: number;
+  change_percent: number;
+  recommendation: 'BUY' | 'SELL' | 'HOLD';
+  confidence: number;
+  reasoning: string;
+}
+
+interface WatchlistRecommendations {
+  stocks: StockRecommendation[];
+  top_recommendations: StockRecommendation[];
+}
+
 const WatchlistManager: React.FC = () => {
   const [watchlists, setWatchlists] = useState<WatchlistWithStocks[]>([]);
   const [symbols, setSymbols] = useState<StockSymbol[]>([]);
@@ -41,6 +59,11 @@ const WatchlistManager: React.FC = () => {
   const [newStockSymbol, setNewStockSymbol] = useState('');
   const [newStockNotes, setNewStockNotes] = useState('');
   
+  const [activeTab, setActiveTab] = useState<'stocks' | 'recommendations'>('stocks');
+  const [stockRecommendations, setStockRecommendations] = useState<WatchlistRecommendations | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  
   const { user } = useAuth();
 
   // Fetch watchlists when user changes
@@ -50,6 +73,16 @@ const WatchlistManager: React.FC = () => {
       fetchSymbols();
     }
   }, [user]);
+
+  // Add new effect to generate recommendations when active watchlist changes
+  useEffect(() => {
+    if (activeWatchlist && watchlists.length > 0) {
+      const currentWatchlist = watchlists.find(w => w.id === activeWatchlist);
+      if (currentWatchlist && currentWatchlist.stocks.length > 0) {
+        generateRecommendations(currentWatchlist.stocks);
+      }
+    }
+  }, [activeWatchlist, watchlists]);
 
   const fetchSymbols = async () => {
     try {
@@ -317,6 +350,176 @@ const WatchlistManager: React.FC = () => {
 
   // Get the active watchlist object
   const currentWatchlist = watchlists.find(w => w.id === activeWatchlist);
+
+  // Add new function to generate recommendations
+  const generateRecommendations = async (stocks: any[]) => {
+    if (!stocks.length) return;
+    
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    
+    try {
+      const response = await fetch('/api/watchlist/recommendations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ stocks }),
+      });
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to generate stock recommendations');
+      }
+      
+      setStockRecommendations(data.data);
+    } catch (err) {
+      console.error('Error generating recommendations:', err);
+      setAnalysisError('Failed to generate recommendations. Please try again later.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Add new section for recommendations tab
+  const renderRecommendationsTab = () => {
+    if (isAnalyzing) {
+      return (
+        <div className="flex justify-center items-center p-10">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <span className="ml-3 text-gray-600">Analyzing stocks...</span>
+        </div>
+      );
+    }
+    
+    if (analysisError) {
+      return (
+        <div className="bg-red-50 p-4 rounded-md">
+          <p className="text-red-500">{analysisError}</p>
+        </div>
+      );
+    }
+    
+    if (!stockRecommendations) {
+      return (
+        <div className="bg-gray-50 p-4 rounded-md">
+          <p className="text-gray-500">No recommendations available. Please select a watchlist with stocks.</p>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-6">
+        {/* Top Recommendations */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Recommendations</h3>
+          
+          <div className="space-y-4">
+            {stockRecommendations.top_recommendations.map((stock) => (
+              <div key={stock.symbol} className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 className="text-lg font-medium text-gray-900">{stock.name || stock.symbol}</h4>
+                    <div className="flex items-center">
+                      <span className="text-gray-500 text-sm mr-2">₹{stock.current_price.toFixed(2)}</span>
+                      <span className={`text-sm flex items-center ${
+                        stock.change >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {stock.change >= 0 ? <FiArrowUp className="mr-1" /> : <FiArrowDown className="mr-1" />}
+                        {Math.abs(stock.change_percent).toFixed(2)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full font-medium text-sm ${
+                    stock.recommendation === 'BUY' 
+                      ? 'bg-green-100 text-green-800' 
+                      : stock.recommendation === 'SELL'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {stock.recommendation} ({stock.confidence}%)
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 mt-2">{stock.reasoning}</p>
+              </div>
+            ))}
+            
+            {stockRecommendations.top_recommendations.length === 0 && (
+              <p className="text-gray-500 text-sm">No recommendations available</p>
+            )}
+          </div>
+        </div>
+        
+        {/* All Stocks Recommendations */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="p-4 border-b">
+            <h3 className="text-lg font-semibold text-gray-800">All Stock Recommendations</h3>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Change</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recommendation</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Confidence</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {stockRecommendations.stocks.map((stock) => (
+                  <tr key={stock.symbol} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{stock.symbol}</div>
+                      <div className="text-sm text-gray-500">{stock.name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">₹{stock.current_price.toFixed(2)}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className={`flex items-center text-sm ${
+                        stock.change >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {stock.change >= 0 ? <FiArrowUp className="mr-1" /> : <FiArrowDown className="mr-1" />}
+                        {Math.abs(stock.change_percent).toFixed(2)}%
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        stock.recommendation === 'BUY' 
+                          ? 'bg-green-100 text-green-800' 
+                          : stock.recommendation === 'SELL'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {stock.recommendation}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 mr-2 w-24">
+                        <div 
+                          className={`h-2.5 rounded-full ${
+                            stock.recommendation === 'BUY' 
+                              ? 'bg-green-600' 
+                              : stock.recommendation === 'SELL'
+                                ? 'bg-red-600'
+                                : 'bg-gray-500'
+                          }`} 
+                          style={{ width: `${stock.confidence}%` }}
+                        ></div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (!user) {
     return (

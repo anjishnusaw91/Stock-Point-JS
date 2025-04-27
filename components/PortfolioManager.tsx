@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, Portfolio, PortfolioStock } from '@/lib/supabase';
 import yahooFinance from 'yahoo-finance2';
+import { FiTrendingUp, FiTrendingDown, FiAlertTriangle, FiCheck, FiPieChart, FiBarChart2 } from 'react-icons/fi';
+import { FaTrash } from 'react-icons/fa';
 
 interface StockSymbol {
   symbol: string;
@@ -16,6 +18,24 @@ interface PortfolioWithStocks extends Portfolio {
   totalCost: number;
   totalProfitLoss: number;
   totalProfitLossPercent: number;
+}
+
+interface PortfolioAnalysis {
+  stocks: any[];
+  summary: {
+    total_investment: number;
+    current_value: number;
+    overall_return: number;
+    overall_return_percent: number;
+    daily_change: number;
+    daily_change_percent: number;
+    risk_profile: string;
+    diversification_score: number;
+    sector_allocation: { [key: string]: number };
+    top_performers: any[];
+    worst_performers: any[];
+    recommendation: string;
+  };
 }
 
 const PortfolioManager: React.FC = () => {
@@ -38,6 +58,11 @@ const PortfolioManager: React.FC = () => {
   const [newStockDate, setNewStockDate] = useState(new Date().toISOString().split('T')[0]);
   const [newStockNotes, setNewStockNotes] = useState('');
   
+  const [activeTab, setActiveTab] = useState<'holdings' | 'analysis'>('holdings');
+  const [portfolioAnalysis, setPortfolioAnalysis] = useState<PortfolioAnalysis | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  
   const { user } = useAuth();
 
   // Fetch portfolios when user changes
@@ -47,6 +72,16 @@ const PortfolioManager: React.FC = () => {
       fetchSymbols();
     }
   }, [user]);
+
+  // Add new effect to analyze portfolio when active portfolio changes
+  useEffect(() => {
+    if (activePortfolio && portfolios.length > 0) {
+      const currentPortfolio = portfolios.find(p => p.id === activePortfolio);
+      if (currentPortfolio && currentPortfolio.stocks.length > 0) {
+        analyzePortfolio(currentPortfolio.stocks);
+      }
+    }
+  }, [activePortfolio, portfolios]);
 
   const fetchSymbols = async () => {
     try {
@@ -134,42 +169,67 @@ const PortfolioManager: React.FC = () => {
       const symbols = stocks.map(stock => stock.symbol);
       const uniqueSymbols = Array.from(new Set(symbols));
       
-      // Batch fetch current prices
-      const quotes = await Promise.all(
-        uniqueSymbols.map(async (symbol) => {
-          try {
-            const nseSymbol = symbol.endsWith('.NS') ? symbol : `${symbol}.NS`;
-            const quote = await yahooFinance.quote(nseSymbol);
-            return { symbol, price: quote.regularMarketPrice };
-          } catch (err) {
-            console.error(`Error fetching price for ${symbol}:`, err);
-            return { symbol, price: 0 };
-          }
-        })
-      );
+      console.log('Fetching current prices for symbols:', uniqueSymbols);
       
-      // Create a price lookup map
-      const priceMap = quotes.reduce((map, quote) => {
-        map[quote.symbol.replace('.NS', '')] = quote.price || 0;
+      // Use server-side API endpoint instead of direct Yahoo Finance call
+      const response = await fetch('/api/stocks/quotes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ symbols: uniqueSymbols }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch stock quotes: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Stock quotes response:', data);
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch stock quotes');
+      }
+      
+      const quotes = data.data;
+      
+      // Create a data lookup map with all fetched information
+      const dataMap = quotes.reduce((map, quote) => {
+        map[quote.symbol.replace('.NS', '')] = quote;
         return map;
-      }, {} as Record<string, number>);
+      }, {} as Record<string, any>);
       
-      // Add current prices and calculations to stocks
-      return stocks.map(stock => {
-        const currentPrice = priceMap[stock.symbol] || 0;
+      // Add current prices and calculations to stocks with detailed data
+      const stocksWithData = stocks.map(stock => {
+        const stockData = dataMap[stock.symbol] || {};
+        const currentPrice = stockData.price || 0;
         const totalValue = stock.quantity * currentPrice;
         const totalCost = stock.quantity * stock.purchase_price;
         const profitLoss = totalValue - totalCost;
         const profitLossPercent = totalCost > 0 ? (profitLoss / totalCost * 100) : 0;
         
+        console.log(`Stock ${stock.symbol}: Current price = ${currentPrice}, Total value = ${totalValue}`);
+        
         return {
           ...stock,
           currentPrice,
+          previousClose: stockData.previousClose,
+          dayHigh: stockData.dayHigh,
+          dayLow: stockData.dayLow,
+          volume: stockData.volume,
+          beta: stockData.beta,
+          pe: stockData.pe,
+          dividendYield: stockData.dividendYield,
+          fiftyDayAvg: stockData.fiftyDayAvg,
+          twoHundredDayAvg: stockData.twoHundredDayAvg,
           totalValue,
           profitLoss,
           profitLossPercent
         };
       });
+      
+      console.log('Processed stocks with data:', stocksWithData);
+      return stocksWithData;
     } catch (err) {
       console.error('Error fetching current prices:', err);
       return stocks;
@@ -299,6 +359,237 @@ const PortfolioManager: React.FC = () => {
   // Get the active portfolio object
   const currentPortfolio = portfolios.find(p => p.id === activePortfolio);
 
+  // Add new function to analyze portfolio
+  const analyzePortfolio = async (stocks: any[]) => {
+    if (!stocks.length) return;
+    
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    
+    try {
+      const response = await fetch('/api/portfolio/analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ stocks }),
+      });
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to analyze portfolio');
+      }
+      
+      setPortfolioAnalysis(data.data);
+    } catch (err) {
+      console.error('Error analyzing portfolio:', err);
+      setAnalysisError('Failed to analyze portfolio. Please try again later.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const renderAnalysisTab = () => {
+    if (isAnalyzing) {
+      return (
+        <div className="flex justify-center items-center p-10">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <span className="ml-3 text-gray-600">Analyzing portfolio...</span>
+        </div>
+      );
+    }
+    
+    if (analysisError) {
+      return (
+        <div className="bg-red-50 p-4 rounded-md">
+          <p className="text-red-500">{analysisError}</p>
+        </div>
+      );
+    }
+    
+    if (!portfolioAnalysis) {
+      return (
+        <div className="bg-gray-50 p-4 rounded-md">
+          <p className="text-gray-500">No analysis available. Please select a portfolio with stocks.</p>
+        </div>
+      );
+    }
+    
+    const { summary } = portfolioAnalysis;
+    
+    return (
+      <div className="space-y-6">
+        {/* Portfolio Summary Card */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Portfolio Summary</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-gray-50 p-4 rounded-md">
+              <p className="text-sm text-gray-500">Total Investment</p>
+              <p className="text-xl font-bold text-gray-800">₹{summary.total_investment.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-md">
+              <p className="text-sm text-gray-500">Current Value</p>
+              <p className="text-xl font-bold text-gray-800">₹{summary.current_value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
+            </div>
+            
+            <div className={`p-4 rounded-md ${summary.overall_return >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+              <p className="text-sm text-gray-500">Overall Return</p>
+              <p className={`text-xl font-bold ${summary.overall_return >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                ₹{summary.overall_return.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                <span className="text-sm ml-1">
+                  ({summary.overall_return_percent.toFixed(2)}%)
+                </span>
+              </p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className={`p-4 rounded-md ${summary.daily_change >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+              <p className="text-sm text-gray-500">Today's Change</p>
+              <div className="flex items-center">
+                {summary.daily_change >= 0 ? 
+                  <FiTrendingUp className="text-green-600 mr-1" /> : 
+                  <FiTrendingDown className="text-red-600 mr-1" />
+                }
+                <p className={`text-md font-medium ${summary.daily_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ₹{summary.daily_change.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  <span className="text-sm ml-1">
+                    ({summary.daily_change_percent.toFixed(2)}%)
+                  </span>
+                </p>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-md">
+              <p className="text-sm text-gray-500">Risk Profile</p>
+              <div className="flex items-center">
+                {summary.risk_profile === 'Conservative' ? (
+                  <div className="bg-green-100 text-green-800 rounded-full px-3 py-1 text-xs font-medium">
+                    Conservative
+                  </div>
+                ) : summary.risk_profile === 'Moderate' ? (
+                  <div className="bg-yellow-100 text-yellow-800 rounded-full px-3 py-1 text-xs font-medium">
+                    Moderate
+                  </div>
+                ) : (
+                  <div className="bg-red-100 text-red-800 rounded-full px-3 py-1 text-xs font-medium">
+                    Aggressive
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-md">
+              <p className="text-sm text-gray-500">Diversification Score</p>
+              <div className="flex items-center">
+                <div className="w-full bg-gray-200 rounded-full h-2.5 mr-2">
+                  <div 
+                    className={`h-2.5 rounded-full ${
+                      summary.diversification_score > 70 ? 'bg-green-600' : 
+                      summary.diversification_score > 40 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`} 
+                    style={{ width: `${summary.diversification_score}%` }}
+                  ></div>
+                </div>
+                <span className="text-sm font-medium">{summary.diversification_score.toFixed(0)}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-blue-50 p-4 rounded-md">
+            <div className="flex items-start">
+              <FiAlertTriangle className="text-blue-500 mr-2 mt-1" />
+              <p className="text-blue-700">{summary.recommendation}</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Sector Allocation */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Sector Allocation</h3>
+          
+          <div className="space-y-3">
+            {Object.entries(summary.sector_allocation).sort((a, b) => b[1] - a[1]).map(([sector, percentage]) => (
+              <div key={sector} className="flex items-center">
+                <span className="w-32 text-sm text-gray-600">{sector}</span>
+                <div className="flex-1">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div 
+                      className="h-2.5 rounded-full bg-blue-600" 
+                      style={{ width: `${percentage}%` }}
+                    ></div>
+                  </div>
+                </div>
+                <span className="w-16 text-right text-sm font-medium text-gray-900">
+                  {percentage.toFixed(1)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Top Performers */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Performers</h3>
+            
+            <div className="space-y-4">
+              {summary.top_performers.map((stock) => (
+                <div key={stock.symbol} className="flex items-center">
+                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                    <FiTrendingUp className="text-green-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-900">{stock.name || stock.symbol}</p>
+                    <p className="text-xs text-gray-500">{stock.quantity} shares at ₹{stock.current_price.toFixed(2)}</p>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <p className="text-sm font-medium text-green-600">+{stock.profit_loss_percent.toFixed(2)}%</p>
+                    <p className="text-xs text-gray-500">₹{stock.profit_loss.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
+                  </div>
+                </div>
+              ))}
+              
+              {summary.top_performers.length === 0 && (
+                <p className="text-gray-500 text-sm">No performers to display</p>
+              )}
+            </div>
+          </div>
+          
+          {/* Worst Performers */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Underperforming</h3>
+            
+            <div className="space-y-4">
+              {summary.worst_performers.map((stock) => (
+                <div key={stock.symbol} className="flex items-center">
+                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
+                    <FiTrendingDown className="text-red-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-900">{stock.name || stock.symbol}</p>
+                    <p className="text-xs text-gray-500">{stock.quantity} shares at ₹{stock.current_price.toFixed(2)}</p>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <p className="text-sm font-medium text-red-600">{stock.profit_loss_percent.toFixed(2)}%</p>
+                    <p className="text-xs text-gray-500">₹{stock.profit_loss.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
+                  </div>
+                </div>
+              ))}
+              
+              {summary.worst_performers.length === 0 && (
+                <p className="text-gray-500 text-sm">No underperformers to display</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (!user) {
     return (
       <div className="p-4">
@@ -414,63 +705,75 @@ const PortfolioManager: React.FC = () => {
                       <p className="text-gray-600">{currentPortfolio.description}</p>
                     )}
                   </div>
-                  <button 
-                    onClick={() => handleDeletePortfolio(currentPortfolio.id)} 
-                    className="text-red-500 hover:text-red-700 transition"
-                  >
-                    Delete Portfolio
-                  </button>
+                  <div className="flex space-x-4">
+                    <button 
+                      onClick={() => analyzePortfolio(currentPortfolio.stocks)} 
+                      className="bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600 transition text-sm flex items-center"
+                    >
+                      <FiBarChart2 className="mr-1" /> Analyze Portfolio
+                    </button>
+                    <button 
+                      onClick={() => handleDeletePortfolio(currentPortfolio.id)} 
+                      className="text-red-500 hover:text-red-700 transition"
+                    >
+                      Delete Portfolio
+                    </button>
+                  </div>
                 </div>
                 
                 {/* Portfolio Summary */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-500">Total Value</div>
-                    <div className="text-xl font-semibold">
+                <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <p className="text-sm text-gray-500">Total Value</p>
+                    <p className="text-xl font-bold text-gray-800">
                       ₹{currentPortfolio.totalValue.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
                       })}
-                    </div>
+                    </p>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-500">Total Cost</div>
-                    <div className="text-xl font-semibold">
+                  
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <p className="text-sm text-gray-500">Total Cost</p>
+                    <p className="text-xl font-bold text-gray-800">
                       ₹{currentPortfolio.totalCost.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
                       })}
-                    </div>
+                    </p>
                   </div>
-                  <div className={`p-4 rounded-lg ${
+                  
+                  <div className={`p-4 rounded-lg shadow ${
                     currentPortfolio.totalProfitLoss >= 0 ? 'bg-green-50' : 'bg-red-50'
                   }`}>
-                    <div className="text-sm text-gray-500">Total P/L</div>
-                    <div className={`text-xl font-semibold ${
+                    <p className="text-sm text-gray-500">Profit/Loss</p>
+                    <p className={`text-xl font-bold ${
                       currentPortfolio.totalProfitLoss >= 0 ? 'text-green-600' : 'text-red-600'
                     }`}>
                       ₹{currentPortfolio.totalProfitLoss.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
                       })}
-                    </div>
+                    </p>
                   </div>
-                  <div className={`p-4 rounded-lg ${
+                  
+                  <div className={`p-4 rounded-lg shadow ${
                     currentPortfolio.totalProfitLossPercent >= 0 ? 'bg-green-50' : 'bg-red-50'
                   }`}>
-                    <div className="text-sm text-gray-500">Return</div>
-                    <div className={`text-xl font-semibold ${
+                    <p className="text-sm text-gray-500">Return %</p>
+                    <p className={`text-xl font-bold ${
                       currentPortfolio.totalProfitLossPercent >= 0 ? 'text-green-600' : 'text-red-600'
                     }`}>
+                      {currentPortfolio.totalProfitLossPercent >= 0 ? '+' : ''}
                       {currentPortfolio.totalProfitLossPercent.toFixed(2)}%
-                    </div>
+                    </p>
                   </div>
                 </div>
                 
                 {/* Stocks Table */}
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-lg font-semibold">Holdings</h4>
+                    <h4 className="text-lg font-semibold">Portfolio Holdings</h4>
                     <button 
                       onClick={() => setShowAddStockForm(!showAddStockForm)} 
                       className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition text-sm"
@@ -482,9 +785,9 @@ const PortfolioManager: React.FC = () => {
                   {/* Add Stock Form */}
                   {showAddStockForm && (
                     <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                      <h5 className="text-md font-semibold mb-3">Add New Stock</h5>
+                      <h5 className="text-md font-semibold mb-3">Add New Stock to Portfolio</h5>
                       <form onSubmit={handleAddStock}>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Symbol
@@ -511,8 +814,8 @@ const PortfolioManager: React.FC = () => {
                               type="number"
                               min="0.01"
                               step="0.01"
-                              value={newStockQuantity}
-                              onChange={(e) => setNewStockQuantity(Number(e.target.value))}
+                              value={newStockQuantity || ''}
+                              onChange={(e) => setNewStockQuantity(parseFloat(e.target.value))}
                               className="w-full p-2 border rounded-md"
                               required
                             />
@@ -525,12 +828,14 @@ const PortfolioManager: React.FC = () => {
                               type="number"
                               min="0.01"
                               step="0.01"
-                              value={newStockPrice}
-                              onChange={(e) => setNewStockPrice(Number(e.target.value))}
+                              value={newStockPrice || ''}
+                              onChange={(e) => setNewStockPrice(parseFloat(e.target.value))}
                               className="w-full p-2 border rounded-md"
                               required
                             />
                           </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Purchase Date
@@ -543,7 +848,7 @@ const PortfolioManager: React.FC = () => {
                               required
                             />
                           </div>
-                          <div className="md:col-span-2">
+                          <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Notes (Optional)
                             </label>
@@ -551,7 +856,7 @@ const PortfolioManager: React.FC = () => {
                               value={newStockNotes}
                               onChange={(e) => setNewStockNotes(e.target.value)}
                               className="w-full p-2 border rounded-md"
-                              rows={2}
+                              rows={1}
                             />
                           </div>
                         </div>
@@ -559,7 +864,7 @@ const PortfolioManager: React.FC = () => {
                           type="submit" 
                           className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
                         >
-                          Add Stock
+                          Add to Portfolio
                         </button>
                       </form>
                     </div>
@@ -576,67 +881,81 @@ const PortfolioManager: React.FC = () => {
                       </button>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="bg-gray-50">
-                            <th className="p-3 text-left text-sm font-semibold text-gray-600">Symbol</th>
-                            <th className="p-3 text-right text-sm font-semibold text-gray-600">Quantity</th>
-                            <th className="p-3 text-right text-sm font-semibold text-gray-600">Buy Price</th>
-                            <th className="p-3 text-right text-sm font-semibold text-gray-600">Current Price</th>
-                            <th className="p-3 text-right text-sm font-semibold text-gray-600">Total Value</th>
-                            <th className="p-3 text-right text-sm font-semibold text-gray-600">P/L</th>
-                            <th className="p-3 text-right text-sm font-semibold text-gray-600">Return %</th>
-                            <th className="p-3 text-center text-sm font-semibold text-gray-600">Actions</th>
+                    <div className="overflow-x-auto bg-white rounded-lg shadow">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Price</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Market Value</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Profit/Loss</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Return %</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="bg-white divide-y divide-gray-200">
                           {currentPortfolio.stocks.map((stock) => (
-                            <tr key={stock.id} className="border-b border-gray-200 hover:bg-gray-50">
-                              <td className="p-3 text-left">
-                                <div>{stock.symbol}</div>
+                            <tr key={stock.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-4 whitespace-nowrap">
+                                <div className="font-medium text-gray-900">{stock.symbol}</div>
                                 <div className="text-xs text-gray-500">
-                                  {new Date(stock.purchase_date).toLocaleDateString()}
+                                  {stock.purchase_date && new Date(stock.purchase_date).toLocaleDateString()}
                                 </div>
                               </td>
-                              <td className="p-3 text-right">{stock.quantity}</td>
-                              <td className="p-3 text-right">
+                              <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500">
+                                {stock.quantity}
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500">
                                 ₹{stock.purchase_price.toLocaleString(undefined, {
                                   minimumFractionDigits: 2,
                                   maximumFractionDigits: 2
                                 })}
                               </td>
-                              <td className="p-3 text-right">
-                                ₹{(stock.currentPrice || 0).toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2
-                                })}
+                              <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div className={`${
+                                  (stock.currentPrice || 0) >= stock.purchase_price ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  ₹{(stock.currentPrice || 0).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </div>
+                                {stock.dayHigh && stock.dayLow && (
+                                  <div className="text-xs text-gray-500">
+                                    H: ₹{stock.dayHigh.toFixed(2)} L: ₹{stock.dayLow.toFixed(2)}
+                                  </div>
+                                )}
                               </td>
-                              <td className="p-3 text-right">
+                              <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                                 ₹{(stock.totalValue || 0).toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0
                                 })}
                               </td>
-                              <td className={`p-3 text-right ${
+                              <td className={`px-4 py-4 whitespace-nowrap text-right text-sm font-medium ${
                                 (stock.profitLoss || 0) >= 0 ? 'text-green-600' : 'text-red-600'
                               }`}>
+                                {(stock.profitLoss || 0) >= 0 ? '+' : ''}
                                 ₹{(stock.profitLoss || 0).toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0
                                 })}
                               </td>
-                              <td className={`p-3 text-right ${
+                              <td className={`px-4 py-4 whitespace-nowrap text-right text-sm font-medium ${
                                 (stock.profitLossPercent || 0) >= 0 ? 'text-green-600' : 'text-red-600'
                               }`}>
+                                {(stock.profitLossPercent || 0) >= 0 ? '+' : ''}
                                 {(stock.profitLossPercent || 0).toFixed(2)}%
                               </td>
-                              <td className="p-3 text-center">
+                              <td className="px-4 py-4 whitespace-nowrap text-center text-sm">
                                 <button
                                   onClick={() => handleRemoveStock(stock.id)}
                                   className="text-red-500 hover:text-red-700 transition"
+                                  title="Remove from portfolio"
                                 >
-                                  Remove
+                                  <FaTrash />
                                 </button>
                               </td>
                             </tr>
