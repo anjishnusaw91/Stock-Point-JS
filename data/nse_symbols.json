@@ -198,5 +198,25 @@
   {
     "symbol": "UPL.NS",
     "name": "UPL Ltd"
+  },
+  {
+    "symbol": "DIXON.NS",
+    "name": "Dixon Technologies (India) Ltd."
+  },
+  {
+    "symbol": "ZENTEC.NS",
+    "name": "Zen Technologies Limited"
+  },
+  {
+    "symbol": "E2E.NS",
+    "name": "E2E Networks Ltd."
+  },
+  {
+    "symbol": "AMBER.NS",
+    "name": "Amber Enterprise India Ltd."
+  },
+  {
+    "symbol": "AMBER.BS",
+    "name": "Moschip Technologies Ltd."
   }
 ]
