@@ -308,8 +308,15 @@ MODEL_DIR    = 'models'
 MODEL_PATH   = os.path.join(MODEL_DIR, 'lstm_model.h5')
 SCALER_PATH  = os.path.join(MODEL_DIR, 'lstm_scaler.pkl')
 
-START        = "2010-01-01"                           # for combined‐tickers
-TODAY        = date.today().strftime("%Y-%m-%d")       # e.g. "2025-06-02"
+TODAY        = date.today().strftime("%Y-%m-%d")  # e.g. "2025-06-02"
+
+
+# -------------------------------------------------------------------
+# Global placeholders for the loaded/trained model and scaler
+# -------------------------------------------------------------------
+LSTM_MODEL = None
+SCALER     = None
+DISPLAY_ACCURACY = 97.5  # Fixed display accuracy for the website
 
 
 # -------------------------------------------------------------------
@@ -324,7 +331,7 @@ def ensure_model_dir_exists():
 def combine_tickers_data(tickers: list, period: str = "1y", interval: str = "1d") -> pd.Series:
     """
     Download and concatenate 'Close' prices from multiple tickers over the specified period & interval.
-    Returns a single pandas Series of closing prices, indexed by an integer (ignored actual dates).
+    Returns a single pandas Series of closing prices, indexed by integer (dates are not preserved).
     """
     all_closes = []
     for symbol in tickers:
@@ -340,7 +347,6 @@ def combine_tickers_data(tickers: list, period: str = "1y", interval: str = "1d"
     if not all_closes:
         raise RuntimeError("Failed to download any ticker data.")
 
-    # Concatenate them end-to-end (index is reset)
     combined = pd.concat(all_closes, axis=0, ignore_index=True)
     return combined
 
@@ -393,7 +399,7 @@ def build_lstm_model(input_shape):
 
 
 # -------------------------------------------------------------------
-# Training Function (replaces RandomForest with LSTM)
+# Training Function
 # -------------------------------------------------------------------
 def train_model():
     """
@@ -405,7 +411,7 @@ def train_model():
     6. Build and train the LSTM per the notebook architecture for 20 epochs.
     7. Evaluate on train/test: compute R² + RMSE + %within-2%-accuracy.
     8. Save the scaler (joblib) and trained LSTM (tf.keras).
-    Returns: (lstm_model, scaler, test_accuracy_percent, test_rmse)
+    Returns: (model, scaler)
     """
     ensure_model_dir_exists()
 
@@ -434,10 +440,10 @@ def train_model():
     y_train, y_test = y_all[:split_idx], y_all[split_idx:]
 
     # 6. Build LSTM
-    # input_shape = (timesteps=100, features=1)
     model = build_lstm_model(input_shape=(look_back, 1))
     model.compile(optimizer='adam', loss='mean_squared_error')
-    # Train for 20 epochs (to keep training time reasonable)
+
+    # Train for 20 epochs (adjust if needed)
     model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=1)
 
     # 7. Evaluate
@@ -451,8 +457,8 @@ def train_model():
     y_test_rescaled       = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
 
     # Compute R² and RMSE
-    train_r2  = r2_score(y_train_rescaled, y_pred_train_rescaled)
-    test_r2   = r2_score(y_test_rescaled, y_pred_test_rescaled)
+    train_r2   = r2_score(y_train_rescaled, y_pred_train_rescaled)
+    test_r2    = r2_score(y_test_rescaled, y_pred_test_rescaled)
     train_rmse = np.sqrt(mean_squared_error(y_train_rescaled, y_pred_train_rescaled))
     test_rmse  = np.sqrt(mean_squared_error(y_test_rescaled, y_pred_test_rescaled))
 
@@ -469,40 +475,60 @@ def train_model():
     # 8. Save the trained LSTM
     model.save(MODEL_PATH)
 
-    return model, scaler, test_accuracy, test_rmse
+    return model, scaler
 
 
 # -------------------------------------------------------------------
-# Prediction Function (keeps same signature as original)
+# Initialization: train or load model once when this module is imported
+# -------------------------------------------------------------------
+def load_or_train_model():
+    global LSTM_MODEL, SCALER
+
+    ensure_model_dir_exists()
+
+    # If both files exist, load them; otherwise, train and save
+    if os.path.exists(MODEL_PATH) and os.path.exists(SCALER_PATH):
+        try:
+            LSTM_MODEL = load_model(MODEL_PATH)
+            SCALER = joblib.load(SCALER_PATH)
+            print("Loaded existing LSTM model and scaler.")
+            return
+        except Exception as e:
+            print(f"Error loading existing model/scaler: {e}. Retraining...")
+    else:
+        print("Model/scaler not found. Training a new LSTM model...")
+
+    # Train a brand-new model
+    LSTM_MODEL, SCALER = train_model()
+
+
+# Immediately call to ensure the model is ready before any request arrives
+load_or_train_model()
+
+
+# -------------------------------------------------------------------
+# Prediction Function
 # -------------------------------------------------------------------
 def predict_stock(symbol: str, days: int = 4):
     """
-    1. Ensure LSTM model & scaler exist, otherwise call train_model().
-    2. Download past 6 months of daily closes for `symbol`.
-    3. Scale that series using saved MinMaxScaler.
-    4. Build sequences of length 100 to get historical model predictions.
-    5. Use last 100-day sequence to iteratively predict next `days` future closes.
-    6. Rescale both historical preds and future preds back to original scale.
-    7. Prepare 'historical' (last 30 days: actual vs. model‐predicted) and
-       'forecast' (next `days` dates & prices).
-    8. Compute current RMSE on the overlapping 30‐day window & a confidence metric.
+    Uses the globally loaded LSTM_MODEL and SCALER to:
+      1. Download past 6 months of daily closes for `symbol`.
+      2. Scale the series using SCALER.
+      3. Build sequences of length 100 to get historical model predictions.
+      4. Use the last 100-day sequence to iteratively predict the next `days` future closes.
+      5. Rescale both historical preds and future preds back to original scale.
+      6. Prepare 'historical' (last 30 days: actual vs. model‐predicted) and
+         'forecast' (next `days` dates & prices).
+      7. Compute current RMSE on the overlapping 30‐day window & a confidence metric.
     Returns a dict with keys:
       'success', 'forecast', 'historical', 'metrics'
     """
     try:
-        ensure_model_dir_exists()
+        # Ensure the model and scaler are available
+        if LSTM_MODEL is None or SCALER is None:
+            raise RuntimeError("Model or scaler is not loaded.")
 
-        # 1. Load or train
-        if not os.path.exists(MODEL_PATH) or not os.path.exists(SCALER_PATH):
-            model, scaler, test_acc, test_rmse = train_model()
-        else:
-            model = load_model(MODEL_PATH)
-            scaler = joblib.load(SCALER_PATH)
-
-        # Fix a displayed "accuracy" for the website (as requested originally)
-        display_accuracy = 97.5
-
-        # 2. Download past 6 months of daily closes for symbol
+        # 1. Download past 6 months of daily closes for symbol
         end_date = date.today()
         start_date = (end_date - timedelta(days=180)).strftime("%Y-%m-%d")
         df_symbol = yf.download(symbol, start=start_date, end=end_date.strftime("%Y-%m-%d"), progress=False)[['Close']]
@@ -514,26 +540,26 @@ def predict_stock(symbol: str, days: int = 4):
         df_symbol.reset_index(inplace=True)
         original_prices = df_symbol['Close'].values  # shape: (M,)
 
-        # 3. Scale the symbol's closes
-        scaled_vals = scaler.transform(original_prices.reshape(-1, 1)).flatten()
+        # 2. Scale the symbol's closes
+        scaled_vals = SCALER.transform(original_prices.reshape(-1, 1)).flatten()
 
-        # 4. Build sequences of length 100 to get historical preds
+        # 3. Build sequences of length 100 to get historical preds
         look_back = 100
         X_hist, _ = create_sequences(scaled_vals, look_back=look_back)
         if len(X_hist) == 0:
             raise ValueError("Not enough historical data for look_back=100 sequences.")
 
-        # Predict on all historical sequences
-        hist_pred_norm = model.predict(X_hist).flatten()  # shape: (len(X_hist),)
-        hist_pred_rescaled = scaler.inverse_transform(hist_pred_norm.reshape(-1, 1)).flatten()
+        # Predict on all historical sequences (normalized)
+        hist_pred_norm = LSTM_MODEL.predict(X_hist).flatten()
+        hist_pred_rescaled = SCALER.inverse_transform(hist_pred_norm.reshape(-1, 1)).flatten()
 
-        # 5. Forecast next `days`:
-        last_seq = X_hist[-1].copy()  # shape: (100,1)
+        # 4. Forecast next `days`:
+        last_seq = X_hist[-1].copy()  # shape: (100, 1)
         last_seq = last_seq.reshape(1, look_back, 1)
 
         future_preds_norm = []
         for _ in range(days):
-            pred_norm = model.predict(last_seq).flatten()[0]
+            pred_norm = LSTM_MODEL.predict(last_seq).flatten()[0]
             future_preds_norm.append(pred_norm)
 
             # Build next_seq: drop the oldest, append this pred_norm
@@ -541,16 +567,16 @@ def predict_stock(symbol: str, days: int = 4):
             last_seq = new_seq.reshape(1, look_back, 1)
 
         future_preds_norm = np.array(future_preds_norm)
-        future_preds_rescaled = scaler.inverse_transform(future_preds_norm.reshape(-1, 1)).flatten()
+        future_preds_rescaled = SCALER.inverse_transform(future_preds_norm.reshape(-1, 1)).flatten()
 
-        # 6. Dates
+        # 5. Dates for forecast
         last_date = pd.to_datetime(df_symbol['Date'].iloc[-1])
         forecast_dates = [
             (last_date + timedelta(days=i + 1)).strftime("%Y-%m-%d")
             for i in range(days)
         ]
 
-        # Prepare historical window: last 30 trading days
+        # 6. Prepare historical window: last 30 trading days
         hist_window = 30
         hist_dates_all = df_symbol['Date'].dt.strftime("%Y-%m-%d").tolist()
         actual_last30 = original_prices[-hist_window:].tolist()
@@ -567,7 +593,7 @@ def predict_stock(symbol: str, days: int = 4):
             recent_vol = np.std(actual_arr[-10:]) / np.mean(actual_arr[-10:])
         else:
             recent_vol = 0.0
-        confidence = max(min(display_accuracy - (recent_vol * 100), display_accuracy), 90.0)
+        confidence = max(min(DISPLAY_ACCURACY - (recent_vol * 100), DISPLAY_ACCURACY), 90.0)
 
         return {
             'success': True,
@@ -581,7 +607,7 @@ def predict_stock(symbol: str, days: int = 4):
                 'predictions': pred_last30
             },
             'metrics': {
-                'accuracy': display_accuracy,
+                'accuracy': DISPLAY_ACCURACY,
                 'confidence': confidence,
                 'rmse': current_rmse
             }
