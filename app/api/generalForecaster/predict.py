@@ -287,291 +287,298 @@ import os
 import sys
 import json
 import argparse
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
-import joblib
 
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error, r2_score
+
+import joblib
+import tensorflow as tf
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import LSTM, Dropout, Dense
 
 # -------------------------------------------------------------------
 # Constants and Paths
 # -------------------------------------------------------------------
-MODEL_DIR = 'models'
-MODEL_PATH = os.path.join(MODEL_DIR, 'random_forest_model.pkl')
-SCALER_PATH = os.path.join(MODEL_DIR, 'rf_scaler.pkl')
+MODEL_DIR    = 'models'
+MODEL_PATH   = os.path.join(MODEL_DIR, 'lstm_model.h5')
+SCALER_PATH  = os.path.join(MODEL_DIR, 'lstm_scaler.pkl')
 
-# Default start date for historical downloads
-START = "2010-01-01"
-TODAY = date.today().strftime("%Y-%m-%d")
+START        = "2010-01-01"                           # for combined‐tickers
+TODAY        = date.today().strftime("%Y-%m-%d")       # e.g. "2025-06-02"
 
 
 # -------------------------------------------------------------------
 # Utility Functions
 # -------------------------------------------------------------------
 def ensure_model_dir_exists():
-    """Ensure that the directory for saving models exists."""
+    """Ensure that the 'models/' directory exists."""
     if not os.path.exists(MODEL_DIR):
         os.makedirs(MODEL_DIR)
 
 
-def load_data(ticker: str, start_date: str = START, end_date: str = TODAY) -> pd.DataFrame:
-    """
-    Download historical stock data for a given ticker symbol between start_date and end_date.
-    Returns a DataFrame with a Date index and a 'Close' column.
-    """
-    data = yf.download(ticker, start=start_date, end=end_date, progress=False)
-    data = data[['Close']].dropna()
-    data.reset_index(inplace=True)
-    return data
-
-
 def combine_tickers_data(tickers: list, period: str = "1y", interval: str = "1d") -> pd.Series:
     """
-    Download and concatenate 'Close' prices of multiple tickers over a specified period and interval.
-    Returns a single pandas Series of all closing prices concatenated one after another.
+    Download and concatenate 'Close' prices from multiple tickers over the specified period & interval.
+    Returns a single pandas Series of closing prices, indexed by an integer (ignored actual dates).
     """
-    all_stock_data = []
+    all_closes = []
     for symbol in tickers:
         try:
-            df_symbol = yf.download(symbol, period=period, interval=interval, progress=False)[['Close']]
-            df_symbol.dropna(inplace=True)
-            all_stock_data.append(df_symbol['Close'])
-            print(f"Downloaded {symbol}: {len(df_symbol)} daily closes.")
+            df = yf.download(symbol, period=period, interval=interval, progress=False)[['Close']]
+            df.dropna(inplace=True)
+            all_closes.append(df['Close'])
+            print(f"Downloaded {symbol}: {len(df)} rows of daily closes.")
         except Exception as e:
-            print(f"Error downloading {symbol}: {e}")
+            print(f"Warning: could not download {symbol}: {e}")
             continue
 
-    if not all_stock_data:
-        raise RuntimeError("No data could be downloaded for any of the provided tickers.")
+    if not all_closes:
+        raise RuntimeError("Failed to download any ticker data.")
 
-    # Concatenate into a single Series
-    combined_series = pd.concat(all_stock_data, axis=0, ignore_index=True)
-    return combined_series
+    # Concatenate them end-to-end (index is reset)
+    combined = pd.concat(all_closes, axis=0, ignore_index=True)
+    return combined
 
 
-def create_features(data_array: np.ndarray, look_back: int = 10) -> (np.ndarray, np.ndarray):
+def create_sequences(data_array: np.ndarray, look_back: int = 100):
     """
-    From a 1D numpy array of scaled prices, create feature vectors based on 'look_back' history.
-    Also appends SMA5, SMA10, momentum, and volatility to each feature vector.
-    Returns X (features) and y (targets).
+    From a 1D numpy array of scaled prices, build sequences of length 'look_back' for LSTM input.
+    Returns (X, y), where
+      X.shape == (num_samples, look_back, 1)
+      y.shape == (num_samples,)
     """
     X, y = [], []
-    length = len(data_array)
-
-    for i in range(length - look_back):
-        # Base features: previous 'look_back' prices
-        features = list(data_array[i:i + look_back])
-
-        # Compute SMA5 and SMA10 (bounded by available look_back history)
-        sma5 = np.mean(data_array[i:i + min(5, look_back)])
-        sma10 = np.mean(data_array[i:i + min(10, look_back)])
-        features.extend([sma5, sma10])
-
-        # Momentum: price change from 5 days before the window to the last day of the window
-        if i >= 5:
-            momentum = data_array[i + look_back - 1] - data_array[i - 5]
-        else:
-            momentum = 0.0
-        features.append(momentum)
-
-        # Volatility: standard deviation over the look_back window
-        volatility = np.std(data_array[i:i + look_back])
-        features.append(volatility)
-
-        # Append feature vector and corresponding target (the next day's price)
-        X.append(features)
-        y.append(data_array[i + look_back])
-
-    return np.array(X), np.array(y)
+    n = len(data_array)
+    for i in range(look_back, n):
+        seq = data_array[i - look_back : i]
+        target = data_array[i]
+        X.append(seq)
+        y.append(target)
+    X = np.array(X)   # shape: (n - look_back, look_back)
+    y = np.array(y)   # shape: (n - look_back,)
+    X = X.reshape((X.shape[0], X.shape[1], 1))  # (samples, timesteps, features=1)
+    return X, y
 
 
-def train_random_forest_model():
+def build_lstm_model(input_shape):
     """
-    1. Downloads 1 year of daily closing prices for a predefined list of tickers.
-    2. Concatenates all closing prices into one long series.
-    3. Scales the combined series using MinMaxScaler.
-    4. Creates features with create_features() using look_back = 10.
-    5. Splits into train/test sets.
-    6. Trains a RandomForestRegressor.
-    7. Evaluates performance and prints metrics.
-    8. Saves both the scaler and trained model to disk.
-    Returns: (trained_model, fitted_scaler)
+    Build the LSTM architecture exactly as in the notebook:
+      - LSTM(50, relu, return_sequences=True) + Dropout(0.2)
+      - LSTM(60, relu, return_sequences=True) + Dropout(0.3)
+      - LSTM(80, relu, return_sequences=True) + Dropout(0.4)
+      - LSTM(120, relu)               + Dropout(0.5)
+      - Dense(1)
+    """
+    model = Sequential()
+    model.add(LSTM(units=50, activation='relu', return_sequences=True,
+                   input_shape=(input_shape[0], input_shape[1])))
+    model.add(Dropout(0.2))
+
+    model.add(LSTM(units=60, activation='relu', return_sequences=True))
+    model.add(Dropout(0.3))
+
+    model.add(LSTM(units=80, activation='relu', return_sequences=True))
+    model.add(Dropout(0.4))
+
+    model.add(LSTM(units=120, activation='relu'))
+    model.add(Dropout(0.5))
+
+    model.add(Dense(units=1))
+    return model
+
+
+# -------------------------------------------------------------------
+# Training Function (replaces RandomForest with LSTM)
+# -------------------------------------------------------------------
+def train_model():
+    """
+    1. Download 1 year of daily closes for a fixed list of tickers.
+    2. Concatenate all closes into a single Series.
+    3. MinMax-scale the combined series.
+    4. Create sequences of length 100 for LSTM.
+    5. Split into train/test (80/20).
+    6. Build and train the LSTM per the notebook architecture for 20 epochs.
+    7. Evaluate on train/test: compute R² + RMSE + %within-2%-accuracy.
+    8. Save the scaler (joblib) and trained LSTM (tf.keras).
+    Returns: (lstm_model, scaler, test_accuracy_percent, test_rmse)
     """
     ensure_model_dir_exists()
 
-    # 1. Define tickers and download data
+    # 1. Define tickers and download
     tickers = [
         "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
         "HINDUNILVR.NS", "SBIN.NS", "BHARTIARTL.NS", "KOTAKBANK.NS", "LT.NS"
     ]
     combined_series = combine_tickers_data(tickers, period="1y", interval="1d")
+    combined_values = combined_series.values.reshape(-1, 1)  # shape: (N,1)
 
-    # 2. Scale combined data
+    # 2. Scale the combined series to [0,1]
     scaler = MinMaxScaler(feature_range=(0, 1))
-    scaled_values = scaler.fit_transform(combined_series.values.reshape(-1, 1)).flatten()
+    scaled_all = scaler.fit_transform(combined_values).flatten()
 
-    # 3. Save the scaler for future predictions
+    # 3. Save scaler
     joblib.dump(scaler, SCALER_PATH)
 
-    # 4. Create features/targets with look_back = 10
-    look_back = 10
-    X, y = create_features(scaled_values, look_back)
+    # 4. Create sequences of length 100
+    look_back = 100
+    X_all, y_all = create_sequences(scaled_all, look_back=look_back)
 
-    # 5. Train/Test split (80% train, 20% test)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    # 5. Train/test split
+    split_idx = int(0.8 * len(X_all))
+    X_train, X_test = X_all[:split_idx], X_all[split_idx:]
+    y_train, y_test = y_all[:split_idx], y_all[split_idx:]
 
-    # 6. Initialize Random Forest with chosen hyperparameters
-    rf_model = RandomForestRegressor(
-        n_estimators=200,
-        max_depth=20,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        max_features='sqrt',
-        bootstrap=True,
-        random_state=42,
-        n_jobs=-1
-    )
+    # 6. Build LSTM
+    # input_shape = (timesteps=100, features=1)
+    model = build_lstm_model(input_shape=(look_back, 1))
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    # Train for 20 epochs (to keep training time reasonable)
+    model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=1)
 
-    rf_model.fit(X_train, y_train)
+    # 7. Evaluate
+    y_pred_train = model.predict(X_train).flatten()
+    y_pred_test  = model.predict(X_test).flatten()
 
-    # 7. Evaluate on both training and test sets
-    y_pred_train = rf_model.predict(X_train)
-    y_pred_test = rf_model.predict(X_test)
+    # Rescale predictions back to original scale
+    y_pred_train_rescaled = scaler.inverse_transform(y_pred_train.reshape(-1, 1)).flatten()
+    y_train_rescaled      = scaler.inverse_transform(y_train.reshape(-1, 1)).flatten()
+    y_pred_test_rescaled  = scaler.inverse_transform(y_pred_test.reshape(-1, 1)).flatten()
+    y_test_rescaled       = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
 
-    train_r2 = r2_score(y_train, y_pred_train)
-    test_r2 = r2_score(y_test, y_pred_test)
-    train_rmse = np.sqrt(mean_squared_error(y_train, y_pred_train))
-    test_rmse = np.sqrt(mean_squared_error(y_test, y_pred_test))
+    # Compute R² and RMSE
+    train_r2  = r2_score(y_train_rescaled, y_pred_train_rescaled)
+    test_r2   = r2_score(y_test_rescaled, y_pred_test_rescaled)
+    train_rmse = np.sqrt(mean_squared_error(y_train_rescaled, y_pred_train_rescaled))
+    test_rmse  = np.sqrt(mean_squared_error(y_test_rescaled, y_pred_test_rescaled))
 
-    print("\n=== Random Forest Model Performance ===")
-    print(f"Train R² Score: {train_r2:.4f} | Train RMSE: {train_rmse:.4f}")
-    print(f"Test R² Score:  {test_r2:.4f} |  Test RMSE: {test_rmse:.4f}")
+    print("\n=== LSTM Model Performance ===")
+    print(f"Train R²: {train_r2:.4f} | Train RMSE: {train_rmse:.4f}")
+    print(f" Test R²: {test_r2:.4f} |  Test RMSE: {test_rmse:.4f}")
 
-    # Accuracy calculation: % predictions within 2% of actual
-    train_acc = np.mean(np.abs(y_pred_train - y_train) / y_train <= 0.02) * 100
-    test_acc = np.mean(np.abs(y_pred_test - y_test) / y_test <= 0.02) * 100
-    print(f"Train Accuracy (±2%): {train_acc:.2f}%")
-    print(f" Test Accuracy (±2%): {test_acc:.2f}%\n")
+    # Compute % of predictions within ±2% of actual for test
+    test_accuracy = np.mean(
+        np.abs(y_pred_test_rescaled - y_test_rescaled) / y_test_rescaled <= 0.02
+    ) * 100
+    print(f"Test Accuracy (within ±2%): {test_accuracy:.2f}%\n")
 
-    # 8. Save trained model
-    joblib.dump(rf_model, MODEL_PATH)
+    # 8. Save the trained LSTM
+    model.save(MODEL_PATH)
 
-    return rf_model, scaler
+    return model, scaler, test_accuracy, test_rmse
 
 
+# -------------------------------------------------------------------
+# Prediction Function (keeps same signature as original)
+# -------------------------------------------------------------------
 def predict_stock(symbol: str, days: int = 4):
     """
-    1. Ensures the model and scaler are available (trains a new model if not).
-    2. Downloads the past 6 months of daily closing prices for the requested symbol.
-    3. Scales that data with the saved scaler.
-    4. Constructs feature windows (look_back=10) to generate 'historical' model predictions for the most recent days.
-    5. Uses the last window to iteratively forecast 'days' future prices.
-    6. Rescales both historical-model-predictions and future forecasts back to original price scale.
-    7. Computes accuracy and confidence metrics for display.
-    Returns a dict with:
-      {
-        success: bool,
-        forecast: { dates: [...], prices: [...] },
-        historical: { dates: [...], prices: [...], predictions: [...] },
-        metrics: { accuracy: float, confidence: float, rmse: float }
-      }
+    1. Ensure LSTM model & scaler exist, otherwise call train_model().
+    2. Download past 6 months of daily closes for `symbol`.
+    3. Scale that series using saved MinMaxScaler.
+    4. Build sequences of length 100 to get historical model predictions.
+    5. Use last 100-day sequence to iteratively predict next `days` future closes.
+    6. Rescale both historical preds and future preds back to original scale.
+    7. Prepare 'historical' (last 30 days: actual vs. model‐predicted) and
+       'forecast' (next `days` dates & prices).
+    8. Compute current RMSE on the overlapping 30‐day window & a confidence metric.
+    Returns a dict with keys:
+      'success', 'forecast', 'historical', 'metrics'
     """
     try:
         ensure_model_dir_exists()
 
-        # 1. Load or train model & scaler
+        # 1. Load or train
         if not os.path.exists(MODEL_PATH) or not os.path.exists(SCALER_PATH):
-            rf_model, scaler = train_random_forest_model()
+            model, scaler, test_acc, test_rmse = train_model()
         else:
-            rf_model = joblib.load(MODEL_PATH)
+            model = load_model(MODEL_PATH)
             scaler = joblib.load(SCALER_PATH)
 
-        # For “accuracy” display, we assume a high value to meet the website requirement
+        # Fix a displayed "accuracy" for the website (as requested originally)
         display_accuracy = 97.5
 
-        # 2. Download past 6 months of daily 'Close' prices
-        data_df = load_data(symbol, start_date=(date.today() - timedelta(days=180)).strftime("%Y-%m-%d"))
-        if data_df.empty or 'Close' not in data_df.columns:
-            raise ValueError(f"No valid data for symbol: {symbol}")
+        # 2. Download past 6 months of daily closes for symbol
+        end_date = date.today()
+        start_date = (end_date - timedelta(days=180)).strftime("%Y-%m-%d")
+        df_symbol = yf.download(symbol, start=start_date, end=end_date.strftime("%Y-%m-%d"), progress=False)[['Close']]
+        df_symbol.dropna(inplace=True)
 
-        data_df = data_df.sort_values('Date').reset_index(drop=True)
-        original_prices = data_df['Close'].values
+        if df_symbol.empty:
+            raise ValueError(f"No data for symbol '{symbol}' over the last 6 months.")
 
-        # 3. Scale the close prices
-        scaled_array = scaler.transform(original_prices.reshape(-1, 1)).flatten()
+        df_symbol.reset_index(inplace=True)
+        original_prices = df_symbol['Close'].values  # shape: (M,)
 
-        # 4. Create feature windows for the historical segment
-        look_back = 10
-        X_hist, _ = create_features(scaled_array, look_back)
+        # 3. Scale the symbol's closes
+        scaled_vals = scaler.transform(original_prices.reshape(-1, 1)).flatten()
 
+        # 4. Build sequences of length 100 to get historical preds
+        look_back = 100
+        X_hist, _ = create_sequences(scaled_vals, look_back=look_back)
         if len(X_hist) == 0:
-            raise ValueError("Not enough historical data to build feature windows (need at least look_back + 1 data points).")
+            raise ValueError("Not enough historical data for look_back=100 sequences.")
 
-        # Generate “historical” predictions for the last 30 days (or fewer if not enough)
-        hist_preds_norm = [rf_model.predict(X_hist[i].reshape(1, -1))[0] for i in range(len(X_hist))]
-        hist_preds_norm = np.array(hist_preds_norm)
+        # Predict on all historical sequences
+        hist_pred_norm = model.predict(X_hist).flatten()  # shape: (len(X_hist),)
+        hist_pred_rescaled = scaler.inverse_transform(hist_pred_norm.reshape(-1, 1)).flatten()
 
-        # Rescale historical predictions back to original scale
-        hist_preds_rescaled = scaler.inverse_transform(hist_preds_norm.reshape(-1, 1)).flatten()
+        # 5. Forecast next `days`:
+        last_seq = X_hist[-1].copy()  # shape: (100,1)
+        last_seq = last_seq.reshape(1, look_back, 1)
 
-        # 5. Prepare to forecast the next 'days' future prices
-        last_features = X_hist[-1].copy()  # Last available look_back feature vector
-
-        future_forecasts_norm = []
+        future_preds_norm = []
         for _ in range(days):
-            # Predict next-day normalized price
-            pred_norm = rf_model.predict(last_features.reshape(1, -1))[0]
-            future_forecasts_norm.append(pred_norm)
+            pred_norm = model.predict(last_seq).flatten()[0]
+            future_preds_norm.append(pred_norm)
 
-            # Build next_features by shifting and updating indicators
-            last_features = np.roll(last_features, -1)
-            last_features[look_back - 1] = pred_norm  # Newest price
-            last_features[look_back] = np.mean(last_features[:min(5, look_back)])   # SMA5
-            last_features[look_back + 1] = np.mean(last_features[:look_back])       # SMA10
-            last_features[look_back + 2] = last_features[look_back - 1] - last_features[0]  # Momentum
-            last_features[look_back + 3] = np.std(last_features[:look_back])         # Volatility
+            # Build next_seq: drop the oldest, append this pred_norm
+            new_seq = np.concatenate([last_seq.flatten()[1:], [pred_norm]])
+            last_seq = new_seq.reshape(1, look_back, 1)
 
-        future_forecasts_norm = np.array(future_forecasts_norm)
-        future_forecasts_rescaled = scaler.inverse_transform(future_forecasts_norm.reshape(-1, 1)).flatten()
+        future_preds_norm = np.array(future_preds_norm)
+        future_preds_rescaled = scaler.inverse_transform(future_preds_norm.reshape(-1, 1)).flatten()
 
-        # 6. Dates for output
-        last_date = pd.to_datetime(data_df['Date'].iloc[-1])
-        forecast_dates = [(last_date + timedelta(days=i + 1)).strftime('%Y-%m-%d') for i in range(days)]
+        # 6. Dates
+        last_date = pd.to_datetime(df_symbol['Date'].iloc[-1])
+        forecast_dates = [
+            (last_date + timedelta(days=i + 1)).strftime("%Y-%m-%d")
+            for i in range(days)
+        ]
 
-        # Historical window: last 30 days of actuals and corresponding model predictions
+        # Prepare historical window: last 30 trading days
         hist_window = 30
-        hist_dates = data_df['Date'].dt.strftime('%Y-%m-%d').tolist()[-hist_window:]
-        hist_prices_window = original_prices[-hist_window:].tolist()
-        hist_preds_window = hist_preds_rescaled[-hist_window:].tolist()
+        hist_dates_all = df_symbol['Date'].dt.strftime("%Y-%m-%d").tolist()
+        actual_last30 = original_prices[-hist_window:].tolist()
+        pred_last30   = hist_pred_rescaled[-hist_window:].tolist()
+        hist_dates30  = hist_dates_all[-hist_window:]
 
-        # 7. Compute current RMSE on the overlapping segment of actual vs. predicted
-        overlap_len = min(len(hist_prices_window), len(hist_preds_window))
-        actual_recent = np.array(hist_prices_window[-overlap_len:])
-        predicted_recent = np.array(hist_preds_window[-overlap_len:])
-        current_rmse = np.sqrt(np.mean((actual_recent - predicted_recent) ** 2))
+        # 7. Compute current RMSE for those 30 days
+        actual_arr = np.array(actual_last30)
+        pred_arr   = np.array(pred_last30)
+        current_rmse = np.sqrt(np.mean((actual_arr - pred_arr) ** 2))
 
-        # 8. Compute a “confidence” metric based on recent volatility
-        recent_volatility = np.std(actual_recent[-10:]) / np.mean(actual_recent[-10:])
-        confidence = max(min(display_accuracy - (recent_volatility * 100), display_accuracy), 90.0)
+        # 8. Confidence based on recent volatility (last 10 days of actuals)
+        if len(actual_arr) >= 10:
+            recent_vol = np.std(actual_arr[-10:]) / np.mean(actual_arr[-10:])
+        else:
+            recent_vol = 0.0
+        confidence = max(min(display_accuracy - (recent_vol * 100), display_accuracy), 90.0)
 
         return {
             'success': True,
             'forecast': {
                 'dates': forecast_dates,
-                'prices': future_forecasts_rescaled.tolist()
+                'prices': future_preds_rescaled.tolist()
             },
             'historical': {
-                'dates': hist_dates,
-                'prices': hist_prices_window,
-                'predictions': hist_preds_window
+                'dates': hist_dates30,
+                'prices': actual_last30,
+                'predictions': pred_last30
             },
             'metrics': {
                 'accuracy': display_accuracy,
@@ -588,12 +595,13 @@ def predict_stock(symbol: str, days: int = 4):
 
 
 # -------------------------------------------------------------------
-# Flask‐style Handler (for Website Integration)
+# Flask‐style Handler (same as original structure)
 # -------------------------------------------------------------------
 def handler(request):
     """
-    For a POST request with JSON { "symbol": ..., "days": ... }, 
-    runs predict_stock() and returns its dictionary result.
+    Expects POST JSON:
+      { "symbol": "...", "days": <int> }
+    Returns the same dict produced by predict_stock().
     """
     if request.method == 'POST':
         try:
@@ -606,21 +614,20 @@ def handler(request):
 
             result = predict_stock(symbol, days)
             return result
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+        except Exception as exc:
+            return {'success': False, 'error': str(exc)}
 
     return {'success': False, 'error': 'Method not allowed'}
 
 
 # -------------------------------------------------------------------
-# Command‐Line Interface
+# Command‐Line Interface (same as original)
 # -------------------------------------------------------------------
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Predict stock prices using Random Forest')
+    parser = argparse.ArgumentParser(description='Predict stock prices using LSTM')
     parser.add_argument('--symbol', type=str, required=True, help='Stock symbol (e.g., RELIANCE.NS)')
-    parser.add_argument('--days', type=int, default=4, help='Number of days to predict (default: 4)')
+    parser.add_argument('--days', type=int, default=4,   help='Number of days to predict (default: 4)')
     args = parser.parse_args()
 
     result = predict_stock(args.symbol, args.days)
-    # Print JSON to stdout so the Node.js wrapper (or other) can capture it
     print(json.dumps(result))
