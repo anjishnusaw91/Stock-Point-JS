@@ -39,6 +39,9 @@ const GeneralForecaster: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chartReady, setChartReady] = useState(false);
+  const [training, setTraining] = useState(false);
+  const [trainingMessage, setTrainingMessage] = useState('');
+  const [polling, setPolling] = useState(false);
 
   useEffect(() => {
     const fetchSymbols = async () => {
@@ -56,6 +59,57 @@ const GeneralForecaster: React.FC = () => {
     fetchSymbols();
   }, []);
 
+  // Polling function for training
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+    if (training && selectedSymbol && !polling) {
+      setPolling(true);
+      pollInterval = setInterval(async () => {
+        try {
+          const response = await fetch('/api/generalForecaster', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              symbol: selectedSymbol,
+              days: predictionDays,
+            }),
+          });
+          const data = await response.json();
+          if (data.success) {
+            setForecastData(data);
+            setTraining(false);
+            setTrainingMessage('');
+            setPolling(false);
+            setLoading(false);
+            clearInterval(pollInterval);
+          } else if (data.training) {
+            setTraining(true);
+            setTrainingMessage(data.message || 'We are cooking the forecast for you, please be patient.');
+          } else if (data.error) {
+            setError(data.error);
+            setTraining(false);
+            setTrainingMessage('');
+            setPolling(false);
+            setLoading(false);
+            clearInterval(pollInterval);
+          }
+        } catch (err) {
+          setError('Polling error.');
+          setTraining(false);
+          setTrainingMessage('');
+          setPolling(false);
+          setLoading(false);
+          clearInterval(pollInterval);
+        }
+      }, 5000);
+    }
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [training, selectedSymbol, predictionDays, polling]);
+
   useEffect(() => {
     const fetchForecast = async () => {
       if (!selectedSymbol) return;
@@ -63,6 +117,10 @@ const GeneralForecaster: React.FC = () => {
       setLoading(true);
       setError(null);
       setChartReady(false);
+      setForecastData(null);
+      setTraining(false);
+      setTrainingMessage('');
+      setPolling(false);
 
       try {
         const response = await fetch('/api/generalForecaster', {
@@ -81,6 +139,13 @@ const GeneralForecaster: React.FC = () => {
         }
 
         const data = await response.json();
+        if (data.training) {
+          setTraining(true);
+          setTrainingMessage(data.message || 'We are cooking the forecast for you, please be patient.');
+          setLoading(false);
+          setForecastData(null);
+          return;
+        }
         if (!data.success) {
           throw new Error(data.error || 'Failed to fetch forecast');
         }
@@ -326,6 +391,19 @@ const GeneralForecaster: React.FC = () => {
               >
                 Retry
               </button>
+            </div>
+          </div>
+        )}
+
+        {training && (
+          <div className="flex flex-col justify-center items-center h-96 w-full">
+            <div className="w-full max-w-lg">
+              <div className="w-full bg-gray-200 rounded-full h-4 mb-4 overflow-hidden">
+                <div className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 animate-pulse h-4 w-full" style={{ animationDuration: '2s' }}></div>
+              </div>
+              <div className="text-xl text-blue-700 font-semibold text-center">
+                {trainingMessage || 'We are cooking the forecast for you, please be patient.'}
+              </div>
             </div>
           </div>
         )}
